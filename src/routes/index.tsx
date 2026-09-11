@@ -1,15 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   ArrowRight,
   Clock,
   Download,
-  Eye,
   Heart,
   Instagram,
   Link2,
   Loader2,
+  MessageCircle,
   ShieldCheck,
   Sparkles,
   Zap,
@@ -24,7 +24,7 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Paste an Instagram link to instantly see the creator, duration and media type, then save the video to your device.",
+          "Paste an Instagram link to instantly see the creator, duration and media type, then save the video straight to your device.",
       },
       { property: "og:title", content: "ReelVault — Instagram Video Downloader" },
       {
@@ -44,12 +44,16 @@ const kindLabel: Record<MediaKind, string> = {
   unknown: "Video",
 };
 
+function proxyUrl(videoUrl: string, name: string, inline: boolean) {
+  return `/api/public/download?name=${encodeURIComponent(name)}&url=${encodeURIComponent(videoUrl)}${
+    inline ? "&mode=inline" : ""
+  }`;
+}
+
 function formatDuration(seconds: number | null) {
-  if (!seconds || seconds <= 0) return "—";
+  if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return "—";
   const total = Math.round(seconds);
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
 
 function formatCount(n: number | null) {
@@ -65,8 +69,10 @@ function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalyzeResult | null>(null);
+  const [duration, setDuration] = useState<number | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const resultRef = useRef<HTMLElement | null>(null);
 
   async function onAnalyze(e: React.FormEvent) {
     e.preventDefault();
@@ -74,10 +80,12 @@ function Home() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setDuration(null);
     setSaved(false);
     try {
       const data = await analyze({ data: { url: url.trim() } });
       setResult(data);
+      setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
     } catch (err) {
       setError(
         err instanceof Error && err.message
@@ -95,15 +103,12 @@ function Home() {
     setError(null);
     try {
       const fileName = `${result.creator}-${result.kind}`;
-      const proxy = `/api/public/download?name=${encodeURIComponent(fileName)}&url=${encodeURIComponent(
-        result.videoUrl,
-      )}`;
-      const res = await fetch(proxy);
+      const res = await fetch(proxyUrl(result.videoUrl, fileName, false));
       if (!res.ok) throw new Error("The video could not be fetched. Try analyzing the link again.");
       const blob = await res.blob();
       const file = new File([blob], `${fileName}.mp4`, { type: "video/mp4" });
 
-      const shareData = { files: [file] } as ShareData;
+      const shareData: ShareData = { files: [file] };
       const canShare =
         typeof navigator !== "undefined" &&
         typeof navigator.canShare === "function" &&
@@ -184,50 +189,45 @@ function Home() {
         </form>
 
         {error && (
-          <p className="animate-rise mx-auto mt-5 max-w-xl rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive-foreground">
+          <p className="animate-rise mx-auto mt-5 max-w-xl rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-foreground">
             {error}
           </p>
         )}
       </section>
 
       {result && (
-        <section className="animate-rise glass-panel mx-auto mt-12 w-full overflow-hidden rounded-3xl sm:mt-16">
+        <section
+          ref={resultRef}
+          className="animate-rise glass-panel mx-auto mt-12 w-full overflow-hidden rounded-3xl sm:mt-16"
+        >
           <div className="grid gap-0 md:grid-cols-[minmax(0,300px)_1fr]">
-            <div className="relative aspect-[4/5] w-full overflow-hidden bg-secondary md:aspect-auto md:min-h-[380px]">
-              {result.thumbnail ? (
-                <img
-                  src={result.thumbnail}
-                  alt={`Preview of the ${kindLabel[result.kind]} by ${result.creatorName}`}
-                  className="size-full object-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="flex size-full items-center justify-center text-muted-foreground">
-                  <Instagram className="size-10" />
-                </div>
-              )}
-              <span className="bg-gradient-brand absolute left-4 top-4 rounded-full px-3 py-1 text-xs font-semibold text-primary-foreground">
+            <div className="relative aspect-[4/5] w-full overflow-hidden bg-secondary md:aspect-auto md:min-h-[420px]">
+              <video
+                key={result.videoUrl}
+                src={proxyUrl(result.videoUrl, "preview", true)}
+                poster={result.thumbnail ?? undefined}
+                controls
+                playsInline
+                preload="metadata"
+                onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+                className="size-full bg-black object-cover"
+              />
+              <span className="bg-gradient-brand pointer-events-none absolute left-4 top-4 rounded-full px-3 py-1 text-xs font-semibold text-primary-foreground">
                 {kindLabel[result.kind]}
               </span>
             </div>
 
             <div className="flex flex-col gap-6 p-6 text-left sm:p-8">
               <div className="flex items-center gap-3">
-                {result.avatar ? (
-                  <img
-                    src={result.avatar}
-                    alt={result.creatorName}
-                    className="size-12 rounded-full object-cover ring-2 ring-border"
-                    loading="lazy"
-                  />
-                ) : (
-                  <span className="bg-gradient-brand flex size-12 items-center justify-center rounded-full text-lg font-semibold text-primary-foreground">
-                    {result.creator.charAt(0).toUpperCase()}
-                  </span>
-                )}
-                <div>
-                  <p className="font-display text-lg font-semibold">{result.creatorName}</p>
-                  <p className="text-sm text-muted-foreground">@{result.creator}</p>
+                <span className="bg-gradient-brand flex size-12 shrink-0 items-center justify-center rounded-full text-lg font-semibold text-primary-foreground">
+                  {result.creator.charAt(0).toUpperCase()}
+                </span>
+                <div className="min-w-0">
+                  <p className="font-display truncate text-lg font-semibold">{result.creatorName}</p>
+                  <p className="truncate text-sm text-muted-foreground">
+                    @{result.creator}
+                    {result.postedAt ? ` · ${result.postedAt}` : ""}
+                  </p>
                 </div>
               </div>
 
@@ -239,13 +239,13 @@ function Home() {
 
               <dl className="grid grid-cols-3 gap-3">
                 {[
-                  { icon: Clock, label: "Duration", value: formatDuration(result.duration) },
-                  { icon: Eye, label: "Views", value: formatCount(result.views) },
+                  { icon: Clock, label: "Duration", value: formatDuration(duration) },
                   { icon: Heart, label: "Likes", value: formatCount(result.likes) },
+                  { icon: MessageCircle, label: "Comments", value: formatCount(result.comments) },
                 ].map((stat) => (
                   <div key={stat.label} className="rounded-2xl border border-border bg-secondary/50 p-4">
                     <stat.icon className="size-4 text-accent" />
-                    <dd className="mt-2 font-display text-lg font-semibold">{stat.value}</dd>
+                    <dd className="font-display mt-2 text-lg font-semibold">{stat.value}</dd>
                     <dt className="text-xs text-muted-foreground">{stat.label}</dt>
                   </div>
                 ))}
@@ -266,7 +266,7 @@ function Home() {
                 </button>
                 {saved && (
                   <p className="text-center text-xs text-accent">
-                    Saved. On phones, choose “Save to photos” if a share sheet appears.
+                    Done. On phones, pick “Save to photos” if a share sheet appears.
                   </p>
                 )}
               </div>
@@ -283,7 +283,7 @@ function Home() {
         ].map((item) => (
           <div key={item.title} className="glass-panel rounded-2xl p-6">
             <item.icon className="size-5 text-accent" />
-            <h2 className="mt-3 font-display text-base font-semibold">{item.title}</h2>
+            <h2 className="font-display mt-3 text-base font-semibold">{item.title}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{item.text}</p>
           </div>
         ))}
