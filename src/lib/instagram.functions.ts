@@ -40,13 +40,46 @@ function normalizeUrl(raw: string): string {
 function decodeEntities(value: string): string {
   return value
     .replace(/&quot;/g, '"')
-    .replace(/&#064;/g, "@")
-    .replace(/&#x27;|&#039;/g, "'")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)));
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)));
 }
+
+/** Read the duration out of the MP4 header (mvhd atom) without downloading the file. */
+async function readDuration(mediaUrl: string): Promise<number | null> {
+  try {
+    const res = await fetch(mediaUrl, {
+      headers: {
+        range: "bytes=0-262143",
+        "user-agent": "Mozilla/5.0",
+        referer: "https://www.instagram.com/",
+      },
+    });
+    if (!res.ok) return null;
+    const view = new DataView(await res.arrayBuffer());
+    for (let i = 0; i < view.byteLength - 32; i++) {
+      if (
+        view.getUint8(i) === 0x6d &&
+        view.getUint8(i + 1) === 0x76 &&
+        view.getUint8(i + 2) === 0x68 &&
+        view.getUint8(i + 3) === 0x64
+      ) {
+        const version = view.getUint8(i + 4);
+        const offset = i + 8 + (version === 0 ? 8 : 16);
+        const scale = view.getUint32(offset);
+        const units = version === 0 ? view.getUint32(offset + 4) : Number(view.getBigUint64(offset + 4));
+        if (scale > 0 && units > 0) return units / scale;
+        return null;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 
 function metaTag(html: string, property: string): string | null {
   const re = new RegExp(`<meta[^>]+property="${property}"[^>]+content="([^"]*)"`, "i");
