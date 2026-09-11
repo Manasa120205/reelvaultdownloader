@@ -33,14 +33,19 @@ export const Route = createFileRoute("/api/public/download")({
           return new Response("Could not fetch the video", { status: 502 });
         }
 
+        const inline = requestUrl.searchParams.get("mode") === "inline";
+
         return new Response(upstream.body, {
           status: 200,
           headers: {
             "content-type": upstream.headers.get("content-type") || "video/mp4",
-            "content-disposition": `attachment; filename="${name}.mp4"`,
+            "content-disposition": inline
+              ? "inline"
+              : `attachment; filename="${name}.mp4"`,
             "cache-control": "no-store",
           },
         });
+
       },
     },
   },
