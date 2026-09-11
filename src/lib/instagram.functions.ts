@@ -10,6 +10,8 @@ export type AnalyzeResult = {
   caption: string | null;
   thumbnail: string | null;
   videoUrl: string;
+  duration: number | null;
+
   likes: number | null;
   comments: number | null;
   postedAt: string | null;
