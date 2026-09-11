@@ -85,6 +85,7 @@ function Home() {
     try {
       const data = await analyze({ data: { url: url.trim() } });
       setResult(data);
+      setDuration(data.duration);
       setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
     } catch (err) {
       setError(
@@ -239,7 +240,7 @@ function Home() {
 
               <dl className="grid grid-cols-3 gap-3">
                 {[
-                  { icon: Clock, label: "Duration", value: formatDuration(duration) },
+                  { icon: Clock, label: "Duration", value: formatDuration(duration ?? result.duration) },
                   { icon: Heart, label: "Likes", value: formatCount(result.likes) },
                   { icon: MessageCircle, label: "Comments", value: formatCount(result.comments) },
                 ].map((stat) => (
