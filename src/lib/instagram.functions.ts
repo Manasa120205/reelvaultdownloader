@@ -217,7 +217,10 @@ export const analyzeLink = createServerFn({ method: "POST" })
       throw new Error("That link is a photo, not a video.");
     }
 
-    const details = await fetchPageDetails(link);
+    const [details, duration] = await Promise.all([
+      fetchPageDetails(link),
+      readDuration(video.media),
+    ]);
 
     return {
       kind,
@@ -226,7 +229,9 @@ export const analyzeLink = createServerFn({ method: "POST" })
       caption: details.caption,
       thumbnail: video.thumb ?? details.thumbnail ?? null,
       videoUrl: video.media,
+      duration,
       likes: details.likes,
+
       comments: details.comments,
       postedAt: details.postedAt,
     };
