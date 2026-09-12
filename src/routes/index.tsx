@@ -113,26 +113,16 @@ function Home() {
       const res = await fetch(proxyUrl(result.videoUrl, fileName, false));
       if (!res.ok) throw new Error("The video could not be fetched. Try analyzing the link again.");
       const blob = await res.blob();
-      const file = new File([blob], `${fileName}.mp4`, { type: "video/mp4" });
 
-      const shareData: ShareData = { files: [file] };
-      const canShare =
-        typeof navigator !== "undefined" &&
-        typeof navigator.canShare === "function" &&
-        navigator.canShare(shareData);
-
-      if (canShare) {
-        await navigator.share(shareData);
-      } else {
-        const objectUrl = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = objectUrl;
-        a.download = `${fileName}.mp4`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(objectUrl), 4000);
-      }
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = `${fileName}.mp4`;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
       setSaved(true);
     } catch (err) {
       if ((err as Error)?.name !== "AbortError") {
