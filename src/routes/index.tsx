@@ -13,8 +13,14 @@ import {
   ShieldCheck,
   Sparkles,
   Zap,
+  Check,
+  Cpu,
+  Gauge,
+  LockKeyhole,
+  Video,
 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { analyzeLink, type AnalyzeResult, type MediaKind } from "@/lib/instagram.functions";
 
 export const Route = createFileRoute("/")({
@@ -138,34 +144,34 @@ function Home() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-5 pb-20 pt-10 sm:px-8">
-      <header className="flex items-center justify-between">
+    <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 pb-16 sm:px-8">
+      <header className="flex h-16 items-center justify-between border-b border-border">
         <div className="flex items-center gap-2.5">
-          <span className="bg-gradient-brand flex size-9 items-center justify-center rounded-xl">
+          <span className="bg-gradient-brand flex size-8 items-center justify-center rounded-md">
             <Instagram className="size-5 text-primary-foreground" />
           </span>
           <span className="font-display text-lg font-semibold">ReelVault</span>
         </div>
-        <span className="glass-panel hidden items-center gap-2 rounded-full px-3.5 py-1.5 text-xs text-muted-foreground sm:flex">
-          <ShieldCheck className="size-3.5 text-accent" /> No login, no watermark
+        <span className="hidden items-center gap-2 font-mono text-[10px] uppercase text-muted-foreground sm:flex">
+          <span className="size-1.5 animate-pulse rounded-full bg-accent" /> System live · 24/7
         </span>
       </header>
 
-      <section className="mt-14 text-center sm:mt-20">
-        <span className="glass-panel inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-medium text-muted-foreground">
-          <Sparkles className="size-3.5 text-accent" /> Reels · Posts · IGTV · Stories
+      <section className="grid items-center gap-12 border-b border-border py-16 lg:grid-cols-[1.1fr_.9fr] lg:py-24">
+        <div className="text-left">
+        <span className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/60 px-3 py-1.5 font-mono text-[10px] uppercase text-muted-foreground">
+          <Sparkles className="size-3 text-accent" /> Reels · Posts · IGTV · Stories
         </span>
-        <h1 className="mt-6 text-4xl font-bold leading-[1.08] sm:text-6xl">
-          Save any Instagram video
-          <br />
-          <span className="text-gradient">in one elegant tap.</span>
+        <h1 className="mt-6 max-w-3xl text-4xl font-bold leading-[1.05] sm:text-6xl">
+          Instagram media,
+          <span className="block text-accent">decoded and downloaded.</span>
         </h1>
-        <p className="mx-auto mt-5 max-w-xl text-base text-muted-foreground">
-          Paste a link — we reveal the creator, the duration and the media type, then hand you the
-          full-quality file.
+        <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground">
+          Paste a link, analyze it, and save the original video with the creator, duration, and
+          media type clearly identified.
         </p>
 
-        <form onSubmit={onAnalyze} className="glass-panel mx-auto mt-9 rounded-2xl p-2 sm:max-w-2xl">
+        <form onSubmit={onAnalyze} className="glass-panel mt-9 rounded-xl p-2">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="flex flex-1 items-center gap-3 px-4 py-3">
               <Link2 className="size-4 shrink-0 text-muted-foreground" />
@@ -178,28 +184,46 @@ function Home() {
                 className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               />
             </div>
-            <button
+            <Button
               type="submit"
               disabled={loading || !url.trim()}
-              className="bg-gradient-brand inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
+              className="bg-gradient-brand inline-flex items-center justify-center gap-2 rounded-md px-6 py-3.5 text-sm font-semibold text-primary-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
             >
               {loading ? <Loader2 className="size-4 animate-spin" /> : <Zap className="size-4" />}
               {loading ? "Analyzing" : "Analyze link"}
-            </button>
+            </Button>
           </div>
         </form>
 
+        <p className="mt-3 flex items-center gap-2 pl-2 text-xs text-muted-foreground">
+          <ShieldCheck className="size-3.5 text-accent" /> Public media only. Links are processed in memory and never stored.
+        </p>
         {error && (
           <p className="animate-rise mx-auto mt-5 max-w-xl rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-foreground">
             {error}
           </p>
         )}
+        </div>
+        <div className="grid grid-cols-2 gap-3" aria-label="Service highlights">
+          {[
+            { icon: Gauge, label: "Resolution", value: "Source quality", wide: true },
+            { icon: Cpu, label: "Processing", value: "Instant analysis" },
+            { icon: LockKeyhole, label: "Privacy", value: "Nothing stored" },
+            { icon: Video, label: "Formats", value: "Reels · Posts · Stories", wide: true },
+          ].map((item) => (
+            <div key={item.label} className={`glass-panel min-h-32 rounded-lg p-5 ${item.wide ? "col-span-2" : ""}`}>
+              <item.icon className="size-5 text-accent" />
+              <p className="mt-7 font-mono text-[10px] uppercase text-muted-foreground">{item.label}</p>
+              <p className="mt-1 font-display text-lg font-semibold">{item.value}</p>
+            </div>
+          ))}
+        </div>
       </section>
 
       {result && (
         <section
           ref={resultRef}
-          className="animate-rise glass-panel mx-auto mt-12 w-full overflow-hidden rounded-3xl sm:mt-16"
+          className="animate-rise glass-panel mx-auto my-12 w-full overflow-hidden rounded-lg"
         >
           <div className="grid gap-0 md:grid-cols-[minmax(0,300px)_1fr]">
             <div className="relative aspect-[4/5] w-full overflow-hidden bg-secondary md:aspect-auto md:min-h-[420px]">
@@ -211,7 +235,7 @@ function Home() {
                 playsInline
                 preload="metadata"
                 onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-                className="size-full bg-black object-cover"
+                className="size-full bg-background object-cover"
               />
               <span className="bg-gradient-brand pointer-events-none absolute left-4 top-4 rounded-full px-3 py-1 text-xs font-semibold text-primary-foreground">
                 {kindLabel[result.kind]}
@@ -253,10 +277,10 @@ function Home() {
               </dl>
 
               <div className="mt-auto flex flex-col gap-3">
-                <button
+                 <Button
                   onClick={onDownload}
                   disabled={downloading}
-                  className="bg-gradient-brand inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+                   className="bg-gradient-brand inline-flex items-center justify-center gap-2 rounded-md px-6 py-4 text-sm font-semibold text-primary-foreground transition hover:brightness-110 disabled:opacity-60"
                 >
                   {downloading ? (
                     <Loader2 className="size-4 animate-spin" />
@@ -264,7 +288,7 @@ function Home() {
                     <Download className="size-4" />
                   )}
                   {downloading ? "Preparing your video…" : "Download video"}
-                </button>
+                 </Button>
                 {saved && (
                   <p className="text-center text-xs text-accent">
                     Done. On phones, pick “Save to photos” if a share sheet appears.
@@ -276,23 +300,28 @@ function Home() {
         </section>
       )}
 
-      <section className="mt-20 grid gap-4 sm:grid-cols-3">
+      <section className="py-16">
+        <p className="font-mono text-[10px] uppercase text-accent">Pipeline</p>
+        <h2 className="mt-3 text-3xl font-semibold">Three steps, start to file</h2>
+        <div className="mt-8 grid gap-4 sm:grid-cols-3">
         {[
-          { icon: Zap, title: "Instant read", text: "Creator, duration and type in seconds." },
-          { icon: Download, title: "Full quality", text: "Original file, no watermark added." },
-          { icon: ShieldCheck, title: "Nothing stored", text: "Links are never saved on our side." },
+          { icon: Link2, title: "Copy the link", text: "Share the reel, post, IGTV, or story and choose Copy link." },
+          { icon: Zap, title: "Analyze the link", text: "Paste it above to resolve the creator, duration, and media type." },
+          { icon: Download, title: "Download the video", text: "Review the preview, then save the source-quality MP4." },
         ].map((item) => (
-          <div key={item.title} className="glass-panel rounded-2xl p-6">
-            <item.icon className="size-5 text-accent" />
+          <div key={item.title} className="glass-panel rounded-lg p-6">
+            <div className="flex items-center justify-between"><item.icon className="size-5 text-accent" /><Check className="size-3.5 text-muted-foreground" /></div>
             <h2 className="font-display mt-3 text-base font-semibold">{item.title}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{item.text}</p>
           </div>
         ))}
+        </div>
       </section>
 
-      <footer className="mt-16 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-        Only download content you have the right to use
+      <footer className="flex items-center justify-between border-t border-border py-7 font-mono text-[10px] uppercase text-muted-foreground">
+        <span>ReelVault // stable build</span><span className="flex items-center gap-2">Only download content you have the right to use
         <ArrowRight className="size-3" />
+        </span>
       </footer>
     </main>
   );
