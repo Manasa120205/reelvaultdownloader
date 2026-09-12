@@ -113,26 +113,16 @@ function Home() {
       const res = await fetch(proxyUrl(result.videoUrl, fileName, false));
       if (!res.ok) throw new Error("The video could not be fetched. Try analyzing the link again.");
       const blob = await res.blob();
-      const file = new File([blob], `${fileName}.mp4`, { type: "video/mp4" });
 
-      const shareData: ShareData = { files: [file] };
-      const canShare =
-        typeof navigator !== "undefined" &&
-        typeof navigator.canShare === "function" &&
-        navigator.canShare(shareData);
-
-      if (canShare) {
-        await navigator.share(shareData);
-      } else {
-        const objectUrl = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = objectUrl;
-        a.download = `${fileName}.mp4`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(objectUrl), 4000);
-      }
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = `${fileName}.mp4`;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
       setSaved(true);
     } catch (err) {
       if ((err as Error)?.name !== "AbortError") {
@@ -144,7 +134,7 @@ function Home() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 pb-16 sm:px-8">
+    <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col overflow-x-hidden px-4 pb-16 sm:px-8">
       <header className="flex h-16 items-center justify-between border-b border-border">
         <div className="flex items-center gap-2.5">
           <span className="bg-gradient-brand flex size-8 items-center justify-center rounded-md">
@@ -157,12 +147,12 @@ function Home() {
         </span>
       </header>
 
-      <section className="grid items-center gap-12 border-b border-border py-16 lg:grid-cols-[1.1fr_.9fr] lg:py-24">
+      <section className="grid items-center gap-10 border-b border-border py-10 sm:py-16 lg:grid-cols-[1.1fr_.9fr] lg:py-24">
         <div className="text-left">
         <span className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/60 px-3 py-1.5 font-mono text-[10px] uppercase text-muted-foreground">
           <Sparkles className="size-3 text-accent" /> Reels · Posts · IGTV · Stories
         </span>
-        <h1 className="mt-6 max-w-3xl text-4xl font-bold leading-[1.05] sm:text-6xl">
+        <h1 className="mt-6 max-w-3xl text-3xl font-bold leading-[1.08] sm:text-5xl lg:text-6xl">
           Instagram media,
           <span className="block text-accent">decoded and downloaded.</span>
         </h1>
@@ -223,9 +213,9 @@ function Home() {
       {result && (
         <section
           ref={resultRef}
-          className="animate-rise glass-panel mx-auto my-12 w-full overflow-hidden rounded-lg"
+          className="animate-rise glass-panel mx-auto my-8 w-full max-w-full overflow-hidden rounded-lg sm:my-12"
         >
-          <div className="grid gap-0 md:grid-cols-[minmax(0,300px)_1fr]">
+          <div className="grid grid-cols-1 gap-0 md:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
             <div className="relative aspect-[4/5] w-full overflow-hidden bg-secondary md:aspect-auto md:min-h-[420px]">
               <video
                 key={result.videoUrl}
@@ -242,7 +232,7 @@ function Home() {
               </span>
             </div>
 
-            <div className="flex flex-col gap-6 p-6 text-left sm:p-8">
+            <div className="flex min-w-0 flex-col gap-5 p-4 text-left sm:gap-6 sm:p-8">
               <div className="flex items-center gap-3">
                 <span className="bg-gradient-brand flex size-12 shrink-0 items-center justify-center rounded-full text-lg font-semibold text-primary-foreground">
                   {result.creator.charAt(0).toUpperCase()}
@@ -262,16 +252,16 @@ function Home() {
                 </p>
               )}
 
-              <dl className="grid grid-cols-3 gap-3">
+              <dl className="grid grid-cols-3 gap-2 sm:gap-3">
                 {[
                   { icon: Clock, label: "Duration", value: formatDuration(duration ?? result.duration) },
                   { icon: Heart, label: "Likes", value: formatCount(result.likes) },
                   { icon: MessageCircle, label: "Comments", value: formatCount(result.comments) },
                 ].map((stat) => (
-                  <div key={stat.label} className="rounded-2xl border border-border bg-secondary/50 p-4">
+                  <div key={stat.label} className="min-w-0 rounded-xl border border-border bg-secondary/50 p-3 sm:rounded-2xl sm:p-4">
                     <stat.icon className="size-4 text-accent" />
-                    <dd className="font-display mt-2 text-lg font-semibold">{stat.value}</dd>
-                    <dt className="text-xs text-muted-foreground">{stat.label}</dt>
+                    <dd className="font-display mt-2 truncate text-base font-semibold sm:text-lg">{stat.value}</dd>
+                    <dt className="truncate text-[11px] text-muted-foreground sm:text-xs">{stat.label}</dt>
                   </div>
                 ))}
               </dl>
@@ -291,7 +281,7 @@ function Home() {
                  </Button>
                 {saved && (
                   <p className="text-center text-xs text-accent">
-                    Done. On phones, pick “Save to photos” if a share sheet appears.
+                    Saved. Check your downloads or gallery.
                   </p>
                 )}
               </div>
