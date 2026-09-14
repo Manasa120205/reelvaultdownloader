@@ -1,8 +1,8 @@
-# Steel Reel — Instagram Reel Downloader
+# StealReel — Instagram Reel Downloader
 
 A clean, fast, and trustworthy consumer utility for downloading supported public Instagram Reels, videos, and photos.
 
-**Brand**: Steel Reel
+**Brand**: StealReel
 "Your reels. Your vault."
 
 ## Build with Lovable

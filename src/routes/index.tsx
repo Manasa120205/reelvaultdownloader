@@ -31,17 +31,17 @@ import { analyzeLink, type AnalyzeResult, type MediaKind } from "@/lib/instagram
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Steel Reel – Instagram Reel Downloader" },
+      { title: "StealReel – Instagram Reel Downloader" },
       {
         name: "description",
         content:
-          "Download supported public Instagram Reels, videos and photos quickly with Steel Reel. No Instagram login required.",
+          "Download supported public Instagram Reels, videos and photos quickly with StealReel. No Instagram login required.",
       },
-      { property: "og:title", content: "Steel Reel – Instagram Reel Downloader" },
+      { property: "og:title", content: "StealReel – Instagram Reel Downloader" },
       {
         property: "og:description",
         content:
-          "Download supported public Instagram Reels, videos and photos quickly with Steel Reel. No Instagram login required.",
+          "Download supported public Instagram Reels, videos and photos quickly with StealReel. No Instagram login required.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -212,7 +212,7 @@ function HomePage() {
           <a
             href="/"
             className="flex items-center gap-2.5 text-white transition hover:opacity-90"
-            aria-label="Steel Reel Home"
+            aria-label="StealReel Home"
           >
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#141416] border border-[#27272A] text-[#6366F1]">
               <svg
@@ -226,7 +226,7 @@ function HomePage() {
                 <path d="m8 12 4 4 4-4" />
               </svg>
             </div>
-            <span className="text-lg font-bold tracking-tight text-white">Steel Reel</span>
+            <span className="text-lg font-bold tracking-tight text-white">StealReel</span>
           </a>
 
           {/* Desktop Navigation Links */}
@@ -620,7 +620,7 @@ function HomePage() {
         <div className="mx-auto max-w-5xl">
           <div className="text-center">
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-              How Steel Reel works
+              How StealReel works
             </h2>
             <p className="mt-2 text-sm sm:text-base text-[#A1A1AA]">
               Three simple steps. That's it.
@@ -637,7 +637,7 @@ function HomePage() {
               {
                 step: "Step 02",
                 title: "Paste",
-                desc: "Paste the link into Steel Reel.",
+                desc: "Paste the link into StealReel.",
               },
               {
                 step: "Step 03",
@@ -717,7 +717,7 @@ function HomePage() {
           </h2>
 
           <p className="mt-4 text-sm sm:text-base text-[#A1A1AA] leading-relaxed">
-            Steel Reel works with public Instagram links. We do not ask you to log in to Instagram to
+            StealReel works with public Instagram links. We do not ask you to log in to Instagram to
             use the downloader.
           </p>
 
@@ -740,12 +740,12 @@ function HomePage() {
           <Accordion type="single" collapsible className="space-y-3">
             {[
               {
-                q: "1. What is Steel Reel?",
-                a: "Steel Reel is a simple tool for downloading supported media from public Instagram links.",
+                q: "1. What is StealReel?",
+                a: "StealReel is a simple tool for downloading supported media from public Instagram links.",
               },
               {
                 q: "2. Do I need to log in to Instagram?",
-                a: "No. Steel Reel does not require your Instagram username or password.",
+                a: "No. StealReel does not require your Instagram username or password.",
               },
               {
                 q: "3. What can I download?",
@@ -753,10 +753,10 @@ function HomePage() {
               },
               {
                 q: "4. Can I download private Instagram content?",
-                a: "No. Steel Reel is designed for publicly accessible content and does not provide access to private accounts.",
+                a: "No. StealReel is designed for publicly accessible content and does not provide access to private accounts.",
               },
               {
-                q: "5. Is Steel Reel free?",
+                q: "5. Is StealReel free?",
                 a: "Yes, the basic downloader is free to use.",
               },
               {
@@ -768,8 +768,8 @@ function HomePage() {
                 a: "They are saved to your device according to your browser's normal download settings.",
               },
               {
-                q: "8. Does Steel Reel store my Instagram password?",
-                a: "No. Steel Reel does not require your Instagram password.",
+                q: "8. Does StealReel store my Instagram password?",
+                a: "No. StealReel does not require your Instagram password.",
               },
             ].map((faq, i) => (
               <AccordionItem
@@ -792,7 +792,7 @@ function HomePage() {
       {/* 11. RESPONSIBLE USE */}
       <div className="border-t border-[#27272A] px-4 py-8 bg-[#0E0E11]">
         <p className="mx-auto max-w-4xl text-center text-xs text-[#A1A1AA]/80 leading-relaxed">
-          Steel Reel is intended for downloading publicly available content that you have permission
+          StealReel is intended for downloading publicly available content that you have permission
           to save or use. Please respect creators' rights, Instagram's terms, and applicable
           copyright laws.
         </p>
@@ -817,7 +817,7 @@ function HomePage() {
                     <path d="m8 12 4 4 4-4" />
                   </svg>
                 </div>
-                <span className="text-base font-bold text-white">Steel Reel</span>
+                <span className="text-base font-bold text-white">StealReel</span>
               </div>
               <p className="mt-3 font-semibold text-sm text-white">"Your reels. Your vault."</p>
               <p className="mt-1 text-xs text-[#A1A1AA] leading-relaxed max-w-xs">
@@ -909,7 +909,7 @@ function HomePage() {
           </div>
 
           <div className="border-t border-[#27272A] pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#A1A1AA]">
-            <span>© 2026 Steel Reel. All rights reserved.</span>
+            <span>© 2026 StealReel. All rights reserved.</span>
             <span>Fast, clean, consumer utility.</span>
           </div>
         </div>
