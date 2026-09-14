@@ -31,10 +31,12 @@ export const Route = createFileRoute("/")({
           "Paste an Instagram link to instantly see the creator, duration and media type, then save the video straight to your device.",
       },
       { property: "og:title", content: "ReelVault — Instagram Video Downloader" },
+      { property: "og:type", content: "website" },
       {
         property: "og:description",
         content: "Analyze any Instagram link and download the video in one tap.",
       },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Home,
@@ -58,13 +60,6 @@ function formatDuration(seconds: number | null) {
   if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return "—";
   const total = Math.round(seconds);
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
-}
-
-function formatCount(n: number | null) {
-  if (n === null || n === undefined) return "—";
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
 }
 
 function Home() {
@@ -143,7 +138,7 @@ function Home() {
           media type clearly identified.
         </p>
 
-        <form onSubmit={onAnalyze} className="glass-panel mt-9 rounded-xl border-accent/70 p-2 ring-1 ring-accent/35 shadow-[0_0_30px_color-mix(in_oklch,var(--accent)_18%,transparent)] focus-within:ring-2 focus-within:ring-accent">
+        <form onSubmit={onAnalyze} className="glass-panel mt-9 rounded-xl border-accent/70 p-2 ring-1 ring-accent/35 shadow-lg shadow-accent/20 focus-within:ring-2 focus-within:ring-accent">
           <label htmlFor="instagram-url" className="block px-4 pb-1 pt-2 font-mono text-[10px] font-semibold uppercase text-accent">
             Paste Instagram link
           </label>
@@ -283,8 +278,8 @@ function Home() {
         </div>
       </section>
 
-      <footer className="flex items-center justify-between border-t border-border py-7 font-mono text-[10px] uppercase text-muted-foreground">
-        <span>ReelVault // stable build</span><span className="flex items-center gap-2">Only download content you have the right to use
+      <footer className="grid grid-cols-1 gap-3 border-t border-border py-7 font-mono text-[10px] uppercase text-muted-foreground sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center sm:justify-between">
+        <span>ReelVault // stable build</span><span className="flex min-w-0 items-center gap-2 sm:justify-end">Only download content you have the right to use
         <ArrowRight className="size-3" />
         </span>
       </footer>
