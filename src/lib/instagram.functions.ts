@@ -196,19 +196,43 @@ export const analyzeLink = createServerFn({ method: "POST" })
 
     const kind = detectKind(link);
 
-    const endpoint = `https://${host}/scraper?url=${encodeURIComponent(link)}`;
+    const isV2 = host.includes("v2") || host.includes("get-post");
+    const endpointPath = isV2 ? "/get-post" : "/scraper";
+    const endpoint = `https://${host}${endpointPath}?url=${encodeURIComponent(link)}`;
+
     let res: Response;
     let text = "";
     try {
       res = await fetch(endpoint, {
-        headers: { "x-rapidapi-key": key, "x-rapidapi-host": host },
+        headers: {
+          "x-rapidapi-key": key,
+          "x-rapidapi-host": host,
+          "Content-Type": "application/json",
+        },
       });
       text = await res.text();
     } catch {
       throw new Error("Unable to analyze this Reel. Please check the link and try again.");
     }
 
-    let payload: { data?: Array<{ media?: string; thumb?: string; isVideo?: boolean }>; message?: unknown };
+    type RawMediaItem = {
+      url?: string;
+      media?: string;
+      thumb?: string;
+      thumbnail?: string;
+      is_video?: boolean;
+      isVideo?: boolean;
+      caption?: string;
+    };
+
+    let payload: {
+      media?: RawMediaItem[];
+      data?: RawMediaItem[];
+      owner?: { username?: string };
+      caption?: string;
+      message?: unknown;
+    };
+
     try {
       payload = JSON.parse(text) as typeof payload;
     } catch {
@@ -216,8 +240,13 @@ export const analyzeLink = createServerFn({ method: "POST" })
     }
 
     if (!res.ok) {
-      if (res.status === 429 || (typeof payload.message === "string" && payload.message.toLowerCase().includes("quota"))) {
-        throw new Error("Monthly RapidAPI quota exceeded on your current plan. Please upgrade your plan or use a new RapidAPI key.");
+      if (
+        res.status === 429 ||
+        (typeof payload.message === "string" && payload.message.toLowerCase().includes("quota"))
+      ) {
+        throw new Error(
+          "Monthly RapidAPI quota exceeded on your current plan. Please upgrade your plan or use a new RapidAPI key.",
+        );
       }
       if (res.status === 401 || res.status === 403) {
         throw new Error("RapidAPI key unauthorized or not subscribed. Please check your RapidAPI account.");
@@ -225,13 +254,24 @@ export const analyzeLink = createServerFn({ method: "POST" })
       throw new Error("Unable to analyze this Reel. Please check the link and try again.");
     }
 
-    const items = payload.data ?? [];
+    const rawList = payload.media || payload.data || [];
+    const normalizedItems = rawList.map((item) => ({
+      media: item.url || item.media || "",
+      thumb: item.thumb || item.thumbnail || null,
+      isVideo: Boolean(item.is_video ?? item.isVideo ?? (kind === "reel" || kind === "igtv")),
+      caption: item.caption,
+    }));
+
     const mediaItem =
-      items.find((item) => item.isVideo && item.media) ??
-      items.find((item) => item.media) ??
-      items[0];
+      normalizedItems.find((item) => item.isVideo && item.media) ??
+      normalizedItems.find((item) => item.media) ??
+      normalizedItems[0];
 
     if (!mediaItem?.media) {
+      const errMsg = typeof payload.message === "string" ? payload.message : "";
+      if (errMsg.toLowerCase().includes("private")) {
+        throw new Error("This Instagram post is private or unavailable. StealReel works with public content only.");
+      }
       throw new Error("Unable to analyze this Reel. Please check the link and try again.");
     }
 
@@ -243,12 +283,15 @@ export const analyzeLink = createServerFn({ method: "POST" })
       isVideo ? readDuration(mediaItem.media) : Promise.resolve(null),
     ]);
 
+    const creator = payload.owner?.username || details.creator || "instagram";
+    const caption = mediaItem.caption || payload.caption || details.caption;
+
     return {
       kind: resolvedKind,
       isVideo,
-      creator: details.creator ?? "instagram",
-      creatorName: details.creatorName ?? details.creator ?? "Instagram Creator",
-      caption: details.caption,
+      creator,
+      creatorName: details.creatorName ?? creator,
+      caption,
       thumbnail: mediaItem.thumb ?? details.thumbnail ?? (isVideo ? null : mediaItem.media),
       videoUrl: mediaItem.media,
       duration,
