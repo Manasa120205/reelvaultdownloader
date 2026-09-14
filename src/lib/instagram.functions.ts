@@ -216,6 +216,12 @@ export const analyzeLink = createServerFn({ method: "POST" })
     }
 
     if (!res.ok) {
+      if (res.status === 429 || (typeof payload.message === "string" && payload.message.toLowerCase().includes("quota"))) {
+        throw new Error("Monthly RapidAPI quota exceeded on your current plan. Please upgrade your plan or use a new RapidAPI key.");
+      }
+      if (res.status === 401 || res.status === 403) {
+        throw new Error("RapidAPI key unauthorized or not subscribed. Please check your RapidAPI account.");
+      }
       throw new Error("Unable to analyze this Reel. Please check the link and try again.");
     }
 

@@ -152,7 +152,7 @@ function HomePage() {
       const msg = err instanceof Error ? err.message : "";
       if (msg.includes("valid Instagram link")) {
         setError("Please enter a valid Instagram link.");
-      } else if (msg.includes("RAPIDAPI_KEY") || msg.includes("Server configuration")) {
+      } else if (msg.includes("quota") || msg.includes("RapidAPI") || msg.includes("RAPIDAPI_KEY") || msg.includes("Server configuration")) {
         setError(msg);
       } else {
         setError("Unable to analyze this Reel. Please check the link and try again.");
