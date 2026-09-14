@@ -5,5 +5,5 @@
 - [x] Emphasize the Instagram link input and Analyze Link action
 - [x] Verify highlight tiles fit Android widths
 - [x] Remove unreliable likes and comments from results
-- [ ] Verify the flow on mobile and desktop
+- [x] Verify the flow on mobile and desktop
 - [x] Prepare the project files for download into Visual Studio Code
