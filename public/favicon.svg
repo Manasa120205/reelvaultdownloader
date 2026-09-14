@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#18181B" />
+      <stop offset="100%" stop-color="#0B0B0D" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#818CF8" />
+      <stop offset="100%" stop-color="#6366F1" />
+    </linearGradient>
+  </defs>
+  <!-- Background Card -->
+  <rect width="32" height="32" rx="8" fill="url(#g)" stroke="#27272A" stroke-width="1.5" />
+  
+  <!-- Media Box -->
+  <rect x="6.5" y="6.5" width="19" height="19" rx="4" fill="none" stroke="url(#accent)" stroke-width="2" />
+  
+  <!-- Arrow Down -->
+  <path d="M16 11v10" stroke="url(#accent)" stroke-width="2" stroke-linecap="round" />
+  <path d="m11.5 16.5 4.5 4.5 4.5-4.5" stroke="url(#accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

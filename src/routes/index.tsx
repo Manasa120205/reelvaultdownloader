@@ -44,7 +44,18 @@ export const Route = createFileRoute("/")({
           "Download supported public Instagram Reels, videos and photos quickly with StealReel. No Instagram login required.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:image", content: "/og-image.png" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { property: "og:image:alt", content: "StealReel – Instagram Reel Downloader" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "StealReel – Instagram Reel Downloader" },
+      {
+        name: "twitter:description",
+        content:
+          "Download supported public Instagram Reels, videos and photos quickly with StealReel. No Instagram login required.",
+      },
+      { name: "twitter:image", content: "/og-image.png" },
     ],
   }),
   component: HomePage,
