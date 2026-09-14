@@ -78,18 +78,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "StealReel – Instagram Reel Downloader" },
+      { title: "Steel Reel – Instagram Reel Downloader" },
       {
         name: "description",
         content:
-          "Download supported public Instagram Reels, videos and photos quickly with StealReel. No Instagram login required.",
+          "Download supported public Instagram Reels, videos and photos quickly with Steel Reel. No Instagram login required.",
       },
-      { name: "author", content: "StealReel" },
-      { property: "og:title", content: "StealReel – Instagram Reel Downloader" },
+      { name: "author", content: "Steel Reel" },
+      { property: "og:title", content: "Steel Reel – Instagram Reel Downloader" },
       {
         property: "og:description",
         content:
-          "Download supported public Instagram Reels, videos and photos quickly with StealReel. No Instagram login required.",
+          "Download supported public Instagram Reels, videos and photos quickly with Steel Reel. No Instagram login required.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
