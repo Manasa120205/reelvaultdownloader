@@ -176,7 +176,7 @@ export const analyzeLink = createServerFn({ method: "POST" })
       process.env["RAPIDAPI_HOST"] ||
       "instagram-downloader-scraper-reels-igtv-posts-stories.p.rapidapi.com";
     if (!key) {
-      console.error("[Steel Reel] Missing RAPIDAPI_KEY in server environment.");
+      console.error("[StealReel] Missing RAPIDAPI_KEY in server environment.");
       throw new Error(
         process.env["NODE_ENV"] === "production"
           ? "Unable to analyze this Reel. Please try again later."
