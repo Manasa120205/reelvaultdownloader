@@ -1,18 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
-  Check,
   CheckCircle2,
-  ChevronDown,
-  Clock,
-  Copy,
   Download,
   ExternalLink,
   Film,
   Image as ImageIcon,
-  Key,
-  Link as LinkIcon,
   Loader2,
   Lock,
   Menu,
@@ -32,30 +26,22 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { analyzeLink, type AnalyzeResult, type MediaKind } from "@/lib/instagram.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "ReelVault – Instagram Reel Downloader" },
+      { title: "Steel Reel – Instagram Reel Downloader" },
       {
         name: "description",
         content:
-          "Download supported public Instagram Reels, videos and photos quickly with ReelVault. No Instagram login required.",
+          "Download supported public Instagram Reels, videos and photos quickly with Steel Reel. No Instagram login required.",
       },
-      { property: "og:title", content: "ReelVault – Instagram Reel Downloader" },
+      { property: "og:title", content: "Steel Reel – Instagram Reel Downloader" },
       {
         property: "og:description",
         content:
-          "Download supported public Instagram Reels, videos and photos quickly with ReelVault. No Instagram login required.",
+          "Download supported public Instagram Reels, videos and photos quickly with Steel Reel. No Instagram login required.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -91,36 +77,8 @@ function HomePage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
 
-  // RapidAPI Key Management
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState("");
-  const [savedApiKey, setSavedApiKey] = useState("");
-
   const inputRef = useRef<HTMLInputElement | null>(null);
   const resultRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const storedKey = localStorage.getItem("reelvault_rapidapi_key") || "";
-      setSavedApiKey(storedKey);
-      setApiKeyInput(storedKey);
-    }
-  }, []);
-
-  function handleSaveApiKey(e: React.FormEvent) {
-    e.preventDefault();
-    const clean = apiKeyInput.trim();
-    if (clean) {
-      localStorage.setItem("reelvault_rapidapi_key", clean);
-      setSavedApiKey(clean);
-      toast.success("RapidAPI Key saved successfully");
-    } else {
-      localStorage.removeItem("reelvault_rapidapi_key");
-      setSavedApiKey("");
-      toast.info("Custom key removed. Using server configuration.");
-    }
-    setSettingsOpen(false);
-  }
 
   function validateInstagramUrl(input: string): boolean {
     try {
@@ -145,7 +103,8 @@ function HomePage() {
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  // STEP 2 & 3: Analyze action only (does NOT immediately download)
+  async function handleAnalyze(e: React.FormEvent) {
     e.preventDefault();
     const cleanUrl = url.trim();
 
@@ -169,7 +128,6 @@ function HomePage() {
       const data = await analyze({
         data: {
           url: cleanUrl,
-          apiKey: savedApiKey || undefined,
         },
       });
 
@@ -181,18 +139,17 @@ function HomePage() {
       }, 100);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
-      if (msg.includes("private") || msg.includes("unavailable")) {
-        setError("This Instagram link isn't supported yet. Please try a public Reel, video, or photo.");
-      } else if (msg.includes("RapidAPI") || msg.includes("configured")) {
+      if (msg.includes("RAPIDAPI_KEY") || msg.includes("Server configuration")) {
         setError(msg);
       } else {
-        setError("This Instagram link isn't supported yet. Please try a public Reel, video, or photo.");
+        setError("Unable to analyze this Reel. Please check the link and try again.");
       }
     } finally {
       setLoading(false);
     }
   }
 
+  // STEP 4: Download action (only triggered when user clicks "Download Reel" in result card)
   function handleDownload() {
     if (!result || downloading) return;
     setDownloading(true);
@@ -255,7 +212,7 @@ function HomePage() {
           <a
             href="/"
             className="flex items-center gap-2.5 text-white transition hover:opacity-90"
-            aria-label="ReelVault Home"
+            aria-label="Steel Reel Home"
           >
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#141416] border border-[#27272A] text-[#6366F1]">
               <svg
@@ -269,7 +226,7 @@ function HomePage() {
                 <path d="m8 12 4 4 4-4" />
               </svg>
             </div>
-            <span className="text-lg font-bold tracking-tight text-white">ReelVault</span>
+            <span className="text-lg font-bold tracking-tight text-white">Steel Reel</span>
           </a>
 
           {/* Desktop Navigation Links */}
@@ -308,76 +265,6 @@ function HomePage() {
 
           {/* Right Action */}
           <div className="hidden md:flex items-center gap-3">
-            {/* RapidAPI Key Modal */}
-            <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-              <DialogTrigger asChild>
-                <button
-                  type="button"
-                  title="Configure RapidAPI Key"
-                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#27272A] bg-[#141416] text-[#A1A1AA] hover:text-white hover:border-[#3F3F46] transition"
-                  aria-label="API Settings"
-                >
-                  <Key className="h-4 w-4" />
-                </button>
-              </DialogTrigger>
-              <DialogContent className="border-[#27272A] bg-[#141416] text-white sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle className="text-lg font-bold">API Key Configuration</DialogTitle>
-                  <DialogDescription className="text-sm text-[#A1A1AA]">
-                    Provide a RapidAPI Key if your server environment requires one, or to avoid rate limits.
-                  </DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handleSaveApiKey} className="space-y-4 pt-2">
-                  <div>
-                    <label htmlFor="apiKey" className="block text-xs font-semibold text-[#A1A1AA] mb-1">
-                      RapidAPI Key
-                    </label>
-                    <input
-                      id="apiKey"
-                      type="password"
-                      value={apiKeyInput}
-                      onChange={(e) => setApiKeyInput(e.target.value)}
-                      placeholder="Paste your RapidAPI key..."
-                      className="w-full h-11 rounded-lg border border-[#27272A] bg-[#0B0B0D] px-3 text-sm text-white placeholder:text-[#A1A1AA]/50 outline-none focus:border-[#6366F1]"
-                    />
-                    <p className="mt-1.5 text-xs text-[#A1A1AA]">
-                      Get your key from{" "}
-                      <a
-                        href="https://rapidapi.com/"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[#6366F1] underline"
-                      >
-                        rapidapi.com
-                      </a>
-                      . Saved locally in your browser.
-                    </p>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    {savedApiKey && (
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => {
-                          localStorage.removeItem("reelvault_rapidapi_key");
-                          setSavedApiKey("");
-                          setApiKeyInput("");
-                          setSettingsOpen(false);
-                          toast.info("Custom API Key cleared");
-                        }}
-                      >
-                        Clear Key
-                      </Button>
-                    )}
-                    <Button type="submit" size="sm" className="bg-[#6366F1] hover:bg-[#4F46E5] text-white">
-                      Save Key
-                    </Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
-
             <Button
               onClick={() => {
                 scrollToSection("downloader");
@@ -452,7 +339,7 @@ function HomePage() {
       {/* 3. HERO & DOWNLOADER CARD */}
       <section id="downloader" className="relative py-14 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-4xl text-center">
-          {/* Main Headline (approx 2 lines on desktop) */}
+          {/* Main Headline */}
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-[1.12]">
             Instagram Reels.
             <br />
@@ -464,7 +351,7 @@ function HomePage() {
             Paste an Instagram link and download your favorite public reels quickly and easily.
           </p>
 
-          {/* Downloader Card */}
+          {/* Downloader Card: Initial state has input + "Analyze Link" */}
           <div className="mt-10 rounded-2xl border border-[#27272A] bg-[#141416] p-4 sm:p-6 shadow-2xl text-left">
             <label
               htmlFor="insta-url"
@@ -473,7 +360,7 @@ function HomePage() {
               Paste Instagram URL
             </label>
 
-            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
+            <form onSubmit={handleAnalyze} className="flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
                 <input
                   id="insta-url"
@@ -509,7 +396,7 @@ function HomePage() {
                 )}
               </div>
 
-              {/* Primary CTA Button: "Download Reel" */}
+              {/* Primary Initial CTA Button: "Analyze Link" */}
               <button
                 type="submit"
                 disabled={loading}
@@ -518,13 +405,10 @@ function HomePage() {
                 {loading ? (
                   <>
                     <Loader2 className="h-5 w-5 animate-spin" />
-                    <span>Finding your Reel...</span>
+                    <span>Analyzing Reel...</span>
                   </>
                 ) : (
-                  <>
-                    <Download className="h-5 w-5" />
-                    <span>Download Reel</span>
-                  </>
+                  <span>Analyze Link</span>
                 )}
               </button>
             </form>
@@ -532,17 +416,7 @@ function HomePage() {
             {/* Error state */}
             {error && (
               <div className="mt-3.5 flex items-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-3.5 py-2.5 text-xs sm:text-sm text-red-400">
-                <span className="font-semibold">Error:</span>
                 <span>{error}</span>
-                {error.includes("RapidAPI") && (
-                  <button
-                    type="button"
-                    onClick={() => setSettingsOpen(true)}
-                    className="ml-auto underline font-medium text-white hover:text-red-200"
-                  >
-                    Enter Key
-                  </button>
-                )}
               </div>
             )}
 
@@ -554,7 +428,7 @@ function HomePage() {
             </div>
           </div>
 
-          {/* 5. DOWNLOAD RESULT / PREVIEW CARD */}
+          {/* 5. DOWNLOAD RESULT / PREVIEW CARD (Appears only AFTER successful analysis) */}
           {result && (
             <div
               ref={resultRef}
@@ -563,7 +437,7 @@ function HomePage() {
               <div className="flex items-center justify-between border-b border-[#27272A] pb-4 mb-6">
                 <div className="flex items-center gap-2 text-sm font-semibold text-[#10B981]">
                   <CheckCircle2 className="h-5 w-5" />
-                  <span>Reel found ✓</span>
+                  <span>Reel found</span>
                 </div>
                 <span className="text-xs text-[#A1A1AA] bg-[#1A1A1D] px-2.5 py-1 rounded-md border border-[#27272A]">
                   Public Instagram content
@@ -652,7 +526,7 @@ function HomePage() {
                     </div>
                   </div>
 
-                  {/* Primary & Secondary Download Buttons */}
+                  {/* Primary Download Button: "Download Reel" (appears ONLY in result card) */}
                   <div className="pt-2 space-y-2.5">
                     <button
                       onClick={handleDownload}
@@ -667,7 +541,7 @@ function HomePage() {
                       ) : (
                         <>
                           <Download className="h-5 w-5" />
-                          <span>{result.isVideo ? "Download MP4" : "Download JPG"}</span>
+                          <span>{result.isVideo ? "Download Reel" : "Download Photo"}</span>
                         </>
                       )}
                     </button>
@@ -746,7 +620,7 @@ function HomePage() {
         <div className="mx-auto max-w-5xl">
           <div className="text-center">
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-              How ReelVault works
+              How Steel Reel works
             </h2>
             <p className="mt-2 text-sm sm:text-base text-[#A1A1AA]">
               Three simple steps. That's it.
@@ -763,7 +637,7 @@ function HomePage() {
               {
                 step: "Step 02",
                 title: "Paste",
-                desc: "Paste the link into ReelVault.",
+                desc: "Paste the link into Steel Reel.",
               },
               {
                 step: "Step 03",
@@ -843,7 +717,7 @@ function HomePage() {
           </h2>
 
           <p className="mt-4 text-sm sm:text-base text-[#A1A1AA] leading-relaxed">
-            ReelVault works with public Instagram links. We do not ask you to log in to Instagram to
+            Steel Reel works with public Instagram links. We do not ask you to log in to Instagram to
             use the downloader.
           </p>
 
@@ -866,12 +740,12 @@ function HomePage() {
           <Accordion type="single" collapsible className="space-y-3">
             {[
               {
-                q: "1. What is ReelVault?",
-                a: "ReelVault is a simple tool for downloading supported media from public Instagram links.",
+                q: "1. What is Steel Reel?",
+                a: "Steel Reel is a simple tool for downloading supported media from public Instagram links.",
               },
               {
                 q: "2. Do I need to log in to Instagram?",
-                a: "No. ReelVault does not require your Instagram username or password.",
+                a: "No. Steel Reel does not require your Instagram username or password.",
               },
               {
                 q: "3. What can I download?",
@@ -879,10 +753,10 @@ function HomePage() {
               },
               {
                 q: "4. Can I download private Instagram content?",
-                a: "No. ReelVault is designed for publicly accessible content and does not provide access to private accounts.",
+                a: "No. Steel Reel is designed for publicly accessible content and does not provide access to private accounts.",
               },
               {
-                q: "5. Is ReelVault free?",
+                q: "5. Is Steel Reel free?",
                 a: "Yes, the basic downloader is free to use.",
               },
               {
@@ -894,8 +768,8 @@ function HomePage() {
                 a: "They are saved to your device according to your browser's normal download settings.",
               },
               {
-                q: "8. Does ReelVault store my Instagram password?",
-                a: "No. ReelVault does not require your Instagram password.",
+                q: "8. Does Steel Reel store my Instagram password?",
+                a: "No. Steel Reel does not require your Instagram password.",
               },
             ].map((faq, i) => (
               <AccordionItem
@@ -918,7 +792,7 @@ function HomePage() {
       {/* 11. RESPONSIBLE USE */}
       <div className="border-t border-[#27272A] px-4 py-8 bg-[#0E0E11]">
         <p className="mx-auto max-w-4xl text-center text-xs text-[#A1A1AA]/80 leading-relaxed">
-          ReelVault is intended for downloading publicly available content that you have permission
+          Steel Reel is intended for downloading publicly available content that you have permission
           to save or use. Please respect creators' rights, Instagram's terms, and applicable
           copyright laws.
         </p>
@@ -943,7 +817,7 @@ function HomePage() {
                     <path d="m8 12 4 4 4-4" />
                   </svg>
                 </div>
-                <span className="text-base font-bold text-white">ReelVault</span>
+                <span className="text-base font-bold text-white">Steel Reel</span>
               </div>
               <p className="mt-3 font-semibold text-sm text-white">"Your reels. Your vault."</p>
               <p className="mt-1 text-xs text-[#A1A1AA] leading-relaxed max-w-xs">
@@ -1035,7 +909,7 @@ function HomePage() {
           </div>
 
           <div className="border-t border-[#27272A] pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#A1A1AA]">
-            <span>© 2026 ReelVault. All rights reserved.</span>
+            <span>© 2026 Steel Reel. All rights reserved.</span>
             <span>Fast, clean, consumer utility.</span>
           </div>
         </div>

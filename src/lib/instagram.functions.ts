@@ -19,7 +19,6 @@ export type AnalyzeResult = {
 
 const inputSchema = z.object({
   url: z.string().trim().min(5).max(500),
-  apiKey: z.string().trim().optional(),
 });
 
 export function detectKind(url: string): MediaKind {
@@ -172,13 +171,16 @@ async function fetchPageDetails(link: string) {
 export const analyzeLink = createServerFn({ method: "POST" })
   .validator((data: unknown) => inputSchema.parse(data))
   .handler(async ({ data }): Promise<AnalyzeResult> => {
-    const key = data.apiKey?.trim() || process.env["RAPIDAPI_KEY"];
+    const key = process.env["RAPIDAPI_KEY"];
     const host =
       process.env["RAPIDAPI_HOST"] ||
       "instagram-downloader-scraper-reels-igtv-posts-stories.p.rapidapi.com";
     if (!key) {
+      console.error("[Steel Reel] Missing RAPIDAPI_KEY in server environment.");
       throw new Error(
-        "RapidAPI Key is not configured yet. Please enter your RapidAPI Key in Settings or set RAPIDAPI_KEY in your .env file.",
+        process.env.NODE_ENV === "production"
+          ? "Unable to analyze this Reel. Please try again later."
+          : "RAPIDAPI_KEY is not configured yet. Please add RAPIDAPI_KEY to your .env file.",
       );
     }
 
@@ -186,35 +188,35 @@ export const analyzeLink = createServerFn({ method: "POST" })
     try {
       link = normalizeUrl(data.url);
     } catch {
-      throw new Error("That doesn't look like a valid link.");
+      throw new Error("Please enter a valid Instagram link.");
     }
     if (!/(^|\.)instagram\.com$/i.test(new URL(link).hostname)) {
-      throw new Error("Please paste a full Instagram link.");
+      throw new Error("Please enter a valid Instagram link.");
     }
 
     const kind = detectKind(link);
 
     const endpoint = `https://${host}/scraper?url=${encodeURIComponent(link)}`;
-    const res = await fetch(endpoint, {
-      headers: { "x-rapidapi-key": key, "x-rapidapi-host": host },
-    });
-    const text = await res.text();
+    let res: Response;
+    let text = "";
+    try {
+      res = await fetch(endpoint, {
+        headers: { "x-rapidapi-key": key, "x-rapidapi-host": host },
+      });
+      text = await res.text();
+    } catch {
+      throw new Error("Unable to analyze this Reel. Please check the link and try again.");
+    }
 
     let payload: { data?: Array<{ media?: string; thumb?: string; isVideo?: boolean }>; message?: unknown };
     try {
       payload = JSON.parse(text) as typeof payload;
     } catch {
-      throw new Error("The media service returned an unexpected response. Please try again.");
+      throw new Error("Unable to analyze this Reel. Please check the link and try again.");
     }
 
     if (!res.ok) {
-      const raw = Array.isArray(payload.message) ? payload.message.join(", ") : String(payload.message ?? "");
-      if (/private/i.test(raw)) {
-        throw new Error(
-          "This post is private, expired or unavailable. Only public reels, posts, IGTV and stories can be fetched.",
-        );
-      }
-      throw new Error(raw || "The media service could not read that link.");
+      throw new Error("Unable to analyze this Reel. Please check the link and try again.");
     }
 
     const items = payload.data ?? [];
@@ -224,7 +226,7 @@ export const analyzeLink = createServerFn({ method: "POST" })
       items[0];
 
     if (!mediaItem?.media) {
-      throw new Error("No media found at that link — it may be private or unavailable.");
+      throw new Error("Unable to analyze this Reel. Please check the link and try again.");
     }
 
     const isVideo = Boolean(mediaItem.isVideo);
