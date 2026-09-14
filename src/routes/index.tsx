@@ -5,11 +5,9 @@ import {
   ArrowRight,
   Clock,
   Download,
-  Heart,
   Instagram,
   Link2,
   Loader2,
-  MessageCircle,
   ShieldCheck,
   Sparkles,
   Zap,
@@ -33,10 +31,12 @@ export const Route = createFileRoute("/")({
           "Paste an Instagram link to instantly see the creator, duration and media type, then save the video straight to your device.",
       },
       { property: "og:title", content: "ReelVault — Instagram Video Downloader" },
+      { property: "og:type", content: "website" },
       {
         property: "og:description",
         content: "Analyze any Instagram link and download the video in one tap.",
       },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Home,
@@ -62,13 +62,6 @@ function formatDuration(seconds: number | null) {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
 
-function formatCount(n: number | null) {
-  if (n === null || n === undefined) return "—";
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
-
 function Home() {
   const analyze = useServerFn(analyzeLink);
   const [url, setUrl] = useState("");
@@ -77,7 +70,6 @@ function Home() {
   const [result, setResult] = useState<AnalyzeResult | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
   const [downloading, setDownloading] = useState(false);
-  const [saved, setSaved] = useState(false);
   const resultRef = useRef<HTMLElement | null>(null);
 
   async function onAnalyze(e: React.FormEvent) {
@@ -87,7 +79,6 @@ function Home() {
     setError(null);
     setResult(null);
     setDuration(null);
-    setSaved(false);
     try {
       const data = await analyze({ data: { url: url.trim() } });
       setResult(data);
@@ -104,33 +95,19 @@ function Home() {
     }
   }
 
-  async function onDownload() {
+  function onDownload() {
     if (!result || downloading) return;
     setDownloading(true);
     setError(null);
-    try {
-      const fileName = `${result.creator}-${result.kind}`;
-      const res = await fetch(proxyUrl(result.videoUrl, fileName, false));
-      if (!res.ok) throw new Error("The video could not be fetched. Try analyzing the link again.");
-      const blob = await res.blob();
-
-      const objectUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = objectUrl;
-      a.download = `${fileName}.mp4`;
-      a.rel = "noopener";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
-      setSaved(true);
-    } catch (err) {
-      if ((err as Error)?.name !== "AbortError") {
-        setError(err instanceof Error ? err.message : "Download failed. Please try again.");
-      }
-    } finally {
-      setDownloading(false);
-    }
+    const fileName = `${result.creator}-${result.kind}`;
+    const a = document.createElement("a");
+    a.href = proxyUrl(result.videoUrl, fileName, false);
+    a.download = `${fileName}.mp4`;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => setDownloading(false), 1200);
   }
 
   return (
@@ -161,23 +138,27 @@ function Home() {
           media type clearly identified.
         </p>
 
-        <form onSubmit={onAnalyze} className="glass-panel mt-9 rounded-xl p-2">
+        <form onSubmit={onAnalyze} className="glass-panel mt-9 rounded-xl border-accent/70 p-2 ring-1 ring-accent/35 shadow-lg shadow-accent/20 focus-within:ring-2 focus-within:ring-accent">
+          <label htmlFor="instagram-url" className="block px-4 pb-1 pt-2 font-mono text-[10px] font-semibold uppercase text-accent">
+            Paste Instagram link
+          </label>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="flex flex-1 items-center gap-3 px-4 py-3">
-              <Link2 className="size-4 shrink-0 text-muted-foreground" />
+            <div className="flex min-w-0 flex-1 items-center gap-3 rounded-md bg-secondary/70 px-4 py-3">
+              <Link2 className="size-4 shrink-0 text-accent" />
               <input
+                id="instagram-url"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 inputMode="url"
                 placeholder="https://www.instagram.com/reel/..."
                 aria-label="Instagram link"
-                className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                className="min-w-0 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               />
             </div>
             <Button
               type="submit"
               disabled={loading || !url.trim()}
-              className="bg-gradient-brand inline-flex items-center justify-center gap-2 rounded-md px-6 py-3.5 text-sm font-semibold text-primary-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
+              className="bg-gradient-brand inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-md px-6 py-3.5 text-sm font-bold text-primary-foreground shadow-lg shadow-accent/20 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
             >
               {loading ? <Loader2 className="size-4 animate-spin" /> : <Zap className="size-4" />}
               {loading ? "Analyzing" : "Analyze link"}
@@ -201,10 +182,10 @@ function Home() {
             { icon: LockKeyhole, label: "Privacy", value: "Nothing stored" },
             { icon: Video, label: "Formats", value: "Reels · Posts · Stories", wide: true },
           ].map((item) => (
-            <div key={item.label} className={`glass-panel min-h-32 rounded-lg p-5 ${item.wide ? "col-span-2" : ""}`}>
+            <div key={item.label} className={`glass-panel min-w-0 min-h-28 rounded-lg p-4 sm:min-h-32 sm:p-5 ${item.wide ? "col-span-2" : ""}`}>
               <item.icon className="size-5 text-accent" />
-              <p className="mt-7 font-mono text-[10px] uppercase text-muted-foreground">{item.label}</p>
-              <p className="mt-1 font-display text-lg font-semibold">{item.value}</p>
+              <p className="mt-5 font-mono text-[9px] uppercase text-muted-foreground sm:mt-7 sm:text-[10px]">{item.label}</p>
+              <p className="mt-1 break-words font-display text-sm font-semibold sm:text-lg">{item.value}</p>
             </div>
           ))}
         </div>
@@ -252,25 +233,19 @@ function Home() {
                 </p>
               )}
 
-              <dl className="grid grid-cols-3 gap-2 sm:gap-3">
-                {[
-                  { icon: Clock, label: "Duration", value: formatDuration(duration ?? result.duration) },
-                  { icon: Heart, label: "Likes", value: formatCount(result.likes) },
-                  { icon: MessageCircle, label: "Comments", value: formatCount(result.comments) },
-                ].map((stat) => (
-                  <div key={stat.label} className="min-w-0 rounded-xl border border-border bg-secondary/50 p-3 sm:rounded-2xl sm:p-4">
-                    <stat.icon className="size-4 text-accent" />
-                    <dd className="font-display mt-2 truncate text-base font-semibold sm:text-lg">{stat.value}</dd>
-                    <dt className="truncate text-[11px] text-muted-foreground sm:text-xs">{stat.label}</dt>
-                  </div>
-                ))}
+              <dl className="flex items-center gap-3 border-y border-border py-4">
+                <Clock className="size-4 shrink-0 text-accent" />
+                <div className="min-w-0">
+                  <dt className="text-xs text-muted-foreground">Video duration</dt>
+                  <dd className="font-display text-lg font-semibold">{formatDuration(duration ?? result.duration)}</dd>
+                </div>
               </dl>
 
               <div className="mt-auto flex flex-col gap-3">
                  <Button
                   onClick={onDownload}
                   disabled={downloading}
-                   className="bg-gradient-brand inline-flex items-center justify-center gap-2 rounded-md px-6 py-4 text-sm font-semibold text-primary-foreground transition hover:brightness-110 disabled:opacity-60"
+                    className="bg-gradient-brand inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-md px-6 py-4 text-base font-bold text-primary-foreground shadow-lg shadow-accent/20 transition hover:brightness-110 disabled:opacity-60"
                 >
                   {downloading ? (
                     <Loader2 className="size-4 animate-spin" />
@@ -279,11 +254,6 @@ function Home() {
                   )}
                   {downloading ? "Preparing your video…" : "Download video"}
                  </Button>
-                {saved && (
-                  <p className="text-center text-xs text-accent">
-                    Saved. Check your downloads or gallery.
-                  </p>
-                )}
               </div>
             </div>
           </div>
@@ -308,8 +278,8 @@ function Home() {
         </div>
       </section>
 
-      <footer className="flex items-center justify-between border-t border-border py-7 font-mono text-[10px] uppercase text-muted-foreground">
-        <span>ReelVault // stable build</span><span className="flex items-center gap-2">Only download content you have the right to use
+      <footer className="grid grid-cols-1 gap-3 border-t border-border py-7 font-mono text-[10px] uppercase text-muted-foreground sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center sm:justify-between">
+        <span>ReelVault // stable build</span><span className="flex min-w-0 items-center gap-2 sm:justify-end">Only download content you have the right to use
         <ArrowRight className="size-3" />
         </span>
       </footer>
