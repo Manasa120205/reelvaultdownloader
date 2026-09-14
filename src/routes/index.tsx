@@ -1,288 +1,1045 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  ArrowRight,
-  Clock,
-  Download,
-  Instagram,
-  Link2,
-  Loader2,
-  ShieldCheck,
-  Sparkles,
-  Zap,
   Check,
-  Cpu,
-  Gauge,
-  LockKeyhole,
+  CheckCircle2,
+  ChevronDown,
+  Clock,
+  Copy,
+  Download,
+  ExternalLink,
+  Film,
+  Image as ImageIcon,
+  Key,
+  Link as LinkIcon,
+  Loader2,
+  Lock,
+  Menu,
+  Shield,
+  Smartphone,
+  Sparkles,
   Video,
+  X,
+  Zap,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { analyzeLink, type AnalyzeResult, type MediaKind } from "@/lib/instagram.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "ReelVault — Download Instagram Reels, Posts, IGTV & Stories" },
+      { title: "ReelVault – Instagram Reel Downloader" },
       {
         name: "description",
         content:
-          "Paste an Instagram link to instantly see the creator, duration and media type, then save the video straight to your device.",
+          "Download supported public Instagram Reels, videos and photos quickly with ReelVault. No Instagram login required.",
       },
-      { property: "og:title", content: "ReelVault — Instagram Video Downloader" },
-      { property: "og:type", content: "website" },
+      { property: "og:title", content: "ReelVault – Instagram Reel Downloader" },
       {
         property: "og:description",
-        content: "Analyze any Instagram link and download the video in one tap.",
+        content:
+          "Download supported public Instagram Reels, videos and photos quickly with ReelVault. No Instagram login required.",
       },
-      { name: "twitter:card", content: "summary" },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: Home,
+  component: HomePage,
 });
 
-const kindLabel: Record<MediaKind, string> = {
-  reel: "Reel",
-  post: "Post video",
-  igtv: "IGTV",
-  story: "Story",
-  unknown: "Video",
-};
-
-function proxyUrl(videoUrl: string, name: string, inline: boolean) {
+function proxyUrl(videoUrl: string, name: string, isImage: boolean, inline: boolean) {
   return `/api/public/download?name=${encodeURIComponent(name)}&url=${encodeURIComponent(videoUrl)}${
     inline ? "&mode=inline" : ""
-  }`;
+  }${isImage ? "&type=image" : ""}`;
 }
 
 function formatDuration(seconds: number | null) {
-  if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return "—";
+  if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return null;
   const total = Math.round(seconds);
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+  const m = Math.floor(total / 60);
+  const s = String(total % 60).padStart(2, "0");
+  return `${m}:${s}`;
 }
 
-function Home() {
+function HomePage() {
   const analyze = useServerFn(analyzeLink);
+
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalyzeResult | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
-  const [downloading, setDownloading] = useState(false);
-  const resultRef = useRef<HTMLElement | null>(null);
+  const [selectedQuality, setSelectedQuality] = useState("Original");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
-  async function onAnalyze(e: React.FormEvent) {
+  // RapidAPI Key Management
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [savedApiKey, setSavedApiKey] = useState("");
+
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const resultRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storedKey = localStorage.getItem("reelvault_rapidapi_key") || "";
+      setSavedApiKey(storedKey);
+      setApiKeyInput(storedKey);
+    }
+  }, []);
+
+  function handleSaveApiKey(e: React.FormEvent) {
     e.preventDefault();
-    if (!url.trim() || loading) return;
+    const clean = apiKeyInput.trim();
+    if (clean) {
+      localStorage.setItem("reelvault_rapidapi_key", clean);
+      setSavedApiKey(clean);
+      toast.success("RapidAPI Key saved successfully");
+    } else {
+      localStorage.removeItem("reelvault_rapidapi_key");
+      setSavedApiKey("");
+      toast.info("Custom key removed. Using server configuration.");
+    }
+    setSettingsOpen(false);
+  }
+
+  function validateInstagramUrl(input: string): boolean {
+    try {
+      const parsed = new URL(input.startsWith("http") ? input : `https://${input}`);
+      return /(^|\.)instagram\.com$/i.test(parsed.hostname);
+    } catch {
+      return false;
+    }
+  }
+
+  async function handlePaste() {
+    try {
+      const clipText = await navigator.clipboard.readText();
+      if (clipText) {
+        setUrl(clipText.trim());
+        setError(null);
+        toast.success("Link pasted from clipboard");
+        inputRef.current?.focus();
+      }
+    } catch {
+      inputRef.current?.focus();
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const cleanUrl = url.trim();
+
+    if (!cleanUrl) {
+      setError("Please enter a valid Instagram link.");
+      return;
+    }
+
+    if (!validateInstagramUrl(cleanUrl)) {
+      setError("Please enter a valid Instagram link.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setResult(null);
     setDuration(null);
+    setImageError(false);
+
     try {
-      const data = await analyze({ data: { url: url.trim() } });
+      const data = await analyze({
+        data: {
+          url: cleanUrl,
+          apiKey: savedApiKey || undefined,
+        },
+      });
+
       setResult(data);
       setDuration(data.duration);
-      setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
+
+      setTimeout(() => {
+        resultRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 100);
     } catch (err) {
-      setError(
-        err instanceof Error && err.message
-          ? err.message
-          : "We couldn't read that link. Please try another one.",
-      );
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("private") || msg.includes("unavailable")) {
+        setError("This Instagram link isn't supported yet. Please try a public Reel, video, or photo.");
+      } else if (msg.includes("RapidAPI") || msg.includes("configured")) {
+        setError(msg);
+      } else {
+        setError("This Instagram link isn't supported yet. Please try a public Reel, video, or photo.");
+      }
     } finally {
       setLoading(false);
     }
   }
 
-  function onDownload() {
+  function handleDownload() {
     if (!result || downloading) return;
     setDownloading(true);
+
+    const isImage = !result.isVideo;
+    const cleanName = `${result.creator}-${result.kind || "media"}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const targetUrl = proxyUrl(result.videoUrl, cleanName, isImage, false);
+
+    const link = document.createElement("a");
+    link.href = targetUrl;
+    link.download = `${cleanName}.${isImage ? "jpg" : "mp4"}`;
+    link.rel = "noopener noreferrer";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    setTimeout(() => {
+      setDownloading(false);
+      toast.success(isImage ? "Photo download started" : "Video download started");
+    }, 1200);
+  }
+
+  function handleReset() {
+    setUrl("");
+    setResult(null);
     setError(null);
-    const fileName = `${result.creator}-${result.kind}`;
-    const a = document.createElement("a");
-    a.href = proxyUrl(result.videoUrl, fileName, false);
-    a.download = `${fileName}.mp4`;
-    a.rel = "noopener";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.setTimeout(() => setDownloading(false), 1200);
+    setDuration(null);
+    setImageError(false);
+    inputRef.current?.focus();
+  }
+
+  function scrollToSection(id: string) {
+    setMobileMenuOpen(false);
+    const elem = document.getElementById(id);
+    if (elem) {
+      elem.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  function getMediaLabel(kind: MediaKind, isVideo: boolean): string {
+    if (!isVideo) return "Instagram Photo";
+    switch (kind) {
+      case "reel":
+        return "Instagram Reel";
+      case "story":
+        return "Instagram Story";
+      case "post":
+        return "Instagram Video";
+      default:
+        return "Instagram Video";
+    }
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col overflow-x-hidden px-4 pb-16 sm:px-8">
-      <header className="flex h-16 items-center justify-between border-b border-border">
-        <div className="flex items-center gap-2.5">
-          <span className="bg-gradient-brand flex size-8 items-center justify-center rounded-md">
-            <Instagram className="size-5 text-primary-foreground" />
-          </span>
-          <span className="font-display text-lg font-semibold">ReelVault</span>
-        </div>
-        <span className="hidden items-center gap-2 font-mono text-[10px] uppercase text-muted-foreground sm:flex">
-          <span className="size-1.5 animate-pulse rounded-full bg-accent" /> System live · 24/7
-        </span>
-      </header>
-
-      <section className="grid items-center gap-10 border-b border-border py-10 sm:py-16 lg:grid-cols-[1.1fr_.9fr] lg:py-24">
-        <div className="text-left">
-        <span className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/60 px-3 py-1.5 font-mono text-[10px] uppercase text-muted-foreground">
-          <Sparkles className="size-3 text-accent" /> Reels · Posts · IGTV · Stories
-        </span>
-        <h1 className="mt-6 max-w-3xl text-3xl font-bold leading-[1.08] sm:text-5xl lg:text-6xl">
-          Instagram media,
-          <span className="block text-accent">decoded and downloaded.</span>
-        </h1>
-        <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground">
-          Paste a link, analyze it, and save the original video with the creator, duration, and
-          media type clearly identified.
-        </p>
-
-        <form onSubmit={onAnalyze} className="glass-panel mt-9 rounded-xl border-accent/70 p-2 ring-1 ring-accent/35 shadow-lg shadow-accent/20 focus-within:ring-2 focus-within:ring-accent">
-          <label htmlFor="instagram-url" className="block px-4 pb-1 pt-2 font-mono text-[10px] font-semibold uppercase text-accent">
-            Paste Instagram link
-          </label>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="flex min-w-0 flex-1 items-center gap-3 rounded-md bg-secondary/70 px-4 py-3">
-              <Link2 className="size-4 shrink-0 text-accent" />
-              <input
-                id="instagram-url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                inputMode="url"
-                placeholder="https://www.instagram.com/reel/..."
-                aria-label="Instagram link"
-                className="min-w-0 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-              />
+    <div className="min-h-screen bg-[#0B0B0D] text-white flex flex-col selection:bg-[#6366F1]/30 selection:text-white">
+      {/* 2. NAVBAR */}
+      <header className="sticky top-0 z-40 w-full border-b border-[#27272A] bg-[#0B0B0D]/95 backdrop-blur-md">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          {/* Logo */}
+          <a
+            href="/"
+            className="flex items-center gap-2.5 text-white transition hover:opacity-90"
+            aria-label="ReelVault Home"
+          >
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#141416] border border-[#27272A] text-[#6366F1]">
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5 fill-none stroke-current stroke-[2]"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect width="18" height="18" x="3" y="3" rx="4" />
+                <path d="M12 8v8" />
+                <path d="m8 12 4 4 4-4" />
+              </svg>
             </div>
-            <Button
-              type="submit"
-              disabled={loading || !url.trim()}
-              className="bg-gradient-brand inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-md px-6 py-3.5 text-sm font-bold text-primary-foreground shadow-lg shadow-accent/20 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
+            <span className="text-lg font-bold tracking-tight text-white">ReelVault</span>
+          </a>
+
+          {/* Desktop Navigation Links */}
+          <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-[#A1A1AA]">
+            <button
+              onClick={() => scrollToSection("downloader")}
+              className="transition hover:text-white"
             >
-              {loading ? <Loader2 className="size-4 animate-spin" /> : <Zap className="size-4" />}
-              {loading ? "Analyzing" : "Analyze link"}
+              Reels
+            </button>
+            <button
+              onClick={() => scrollToSection("downloader")}
+              className="transition hover:text-white"
+            >
+              Videos
+            </button>
+            <button
+              onClick={() => scrollToSection("downloader")}
+              className="transition hover:text-white"
+            >
+              Photos
+            </button>
+            <button
+              onClick={() => scrollToSection("how-it-works")}
+              className="transition hover:text-white"
+            >
+              How It Works
+            </button>
+            <button
+              onClick={() => scrollToSection("faq")}
+              className="transition hover:text-white"
+            >
+              FAQ
+            </button>
+          </nav>
+
+          {/* Right Action */}
+          <div className="hidden md:flex items-center gap-3">
+            {/* RapidAPI Key Modal */}
+            <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+              <DialogTrigger asChild>
+                <button
+                  type="button"
+                  title="Configure RapidAPI Key"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#27272A] bg-[#141416] text-[#A1A1AA] hover:text-white hover:border-[#3F3F46] transition"
+                  aria-label="API Settings"
+                >
+                  <Key className="h-4 w-4" />
+                </button>
+              </DialogTrigger>
+              <DialogContent className="border-[#27272A] bg-[#141416] text-white sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="text-lg font-bold">API Key Configuration</DialogTitle>
+                  <DialogDescription className="text-sm text-[#A1A1AA]">
+                    Provide a RapidAPI Key if your server environment requires one, or to avoid rate limits.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleSaveApiKey} className="space-y-4 pt-2">
+                  <div>
+                    <label htmlFor="apiKey" className="block text-xs font-semibold text-[#A1A1AA] mb-1">
+                      RapidAPI Key
+                    </label>
+                    <input
+                      id="apiKey"
+                      type="password"
+                      value={apiKeyInput}
+                      onChange={(e) => setApiKeyInput(e.target.value)}
+                      placeholder="Paste your RapidAPI key..."
+                      className="w-full h-11 rounded-lg border border-[#27272A] bg-[#0B0B0D] px-3 text-sm text-white placeholder:text-[#A1A1AA]/50 outline-none focus:border-[#6366F1]"
+                    />
+                    <p className="mt-1.5 text-xs text-[#A1A1AA]">
+                      Get your key from{" "}
+                      <a
+                        href="https://rapidapi.com/"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[#6366F1] underline"
+                      >
+                        rapidapi.com
+                      </a>
+                      . Saved locally in your browser.
+                    </p>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    {savedApiKey && (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => {
+                          localStorage.removeItem("reelvault_rapidapi_key");
+                          setSavedApiKey("");
+                          setApiKeyInput("");
+                          setSettingsOpen(false);
+                          toast.info("Custom API Key cleared");
+                        }}
+                      >
+                        Clear Key
+                      </Button>
+                    )}
+                    <Button type="submit" size="sm" className="bg-[#6366F1] hover:bg-[#4F46E5] text-white">
+                      Save Key
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+
+            <Button
+              onClick={() => {
+                scrollToSection("downloader");
+                inputRef.current?.focus();
+              }}
+              className="h-10 px-5 rounded-xl bg-[#6366F1] hover:bg-[#4F46E5] text-white text-sm font-semibold transition"
+            >
+              Get Started
             </Button>
           </div>
-        </form>
 
-        <p className="mt-3 flex items-center gap-2 pl-2 text-xs text-muted-foreground">
-          <ShieldCheck className="size-3.5 text-accent" /> Public media only. Links are processed in memory and never stored.
-        </p>
-        {error && (
-          <p className="animate-rise mx-auto mt-5 max-w-xl rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-foreground">
-            {error}
-          </p>
-        )}
+          {/* Mobile Hamburger Toggle */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="flex md:hidden h-10 w-10 items-center justify-center rounded-lg border border-[#27272A] bg-[#141416] text-[#A1A1AA] hover:text-white"
+            aria-label="Toggle Menu"
+          >
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
         </div>
-        <div className="grid grid-cols-2 gap-3" aria-label="Service highlights">
-          {[
-            { icon: Gauge, label: "Resolution", value: "Source quality", wide: true },
-            { icon: Cpu, label: "Processing", value: "Instant analysis" },
-            { icon: LockKeyhole, label: "Privacy", value: "Nothing stored" },
-            { icon: Video, label: "Formats", value: "Reels · Posts · Stories", wide: true },
-          ].map((item) => (
-            <div key={item.label} className={`glass-panel min-w-0 min-h-28 rounded-lg p-4 sm:min-h-32 sm:p-5 ${item.wide ? "col-span-2" : ""}`}>
-              <item.icon className="size-5 text-accent" />
-              <p className="mt-5 font-mono text-[9px] uppercase text-muted-foreground sm:mt-7 sm:text-[10px]">{item.label}</p>
-              <p className="mt-1 break-words font-display text-sm font-semibold sm:text-lg">{item.value}</p>
-            </div>
-          ))}
-        </div>
-      </section>
 
-      {result && (
-        <section
-          ref={resultRef}
-          className="animate-rise glass-panel mx-auto my-8 w-full max-w-full overflow-hidden rounded-lg sm:my-12"
-        >
-          <div className="grid grid-cols-1 gap-0 md:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
-            <div className="relative aspect-[4/5] w-full overflow-hidden bg-secondary md:aspect-auto md:min-h-[420px]">
-              <video
-                key={result.videoUrl}
-                src={proxyUrl(result.videoUrl, "preview", true)}
-                poster={result.thumbnail ?? undefined}
-                controls
-                playsInline
-                preload="metadata"
-                onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-                className="size-full bg-background object-cover"
-              />
-              <span className="bg-gradient-brand pointer-events-none absolute left-4 top-4 rounded-full px-3 py-1 text-xs font-semibold text-primary-foreground">
-                {kindLabel[result.kind]}
-              </span>
-            </div>
-
-            <div className="flex min-w-0 flex-col gap-5 p-4 text-left sm:gap-6 sm:p-8">
-              <div className="flex items-center gap-3">
-                <span className="bg-gradient-brand flex size-12 shrink-0 items-center justify-center rounded-full text-lg font-semibold text-primary-foreground">
-                  {result.creator.charAt(0).toUpperCase()}
-                </span>
-                <div className="min-w-0">
-                  <p className="font-display truncate text-lg font-semibold">{result.creatorName}</p>
-                  <p className="truncate text-sm text-muted-foreground">
-                    @{result.creator}
-                    {result.postedAt ? ` · ${result.postedAt}` : ""}
-                  </p>
-                </div>
-              </div>
-
-              {result.caption && (
-                <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">
-                  {result.caption}
-                </p>
-              )}
-
-              <dl className="flex items-center gap-3 border-y border-border py-4">
-                <Clock className="size-4 shrink-0 text-accent" />
-                <div className="min-w-0">
-                  <dt className="text-xs text-muted-foreground">Video duration</dt>
-                  <dd className="font-display text-lg font-semibold">{formatDuration(duration ?? result.duration)}</dd>
-                </div>
-              </dl>
-
-              <div className="mt-auto flex flex-col gap-3">
-                 <Button
-                  onClick={onDownload}
-                  disabled={downloading}
-                    className="bg-gradient-brand inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-md px-6 py-4 text-base font-bold text-primary-foreground shadow-lg shadow-accent/20 transition hover:brightness-110 disabled:opacity-60"
+        {/* Mobile Dropdown Menu */}
+        {mobileMenuOpen && (
+          <div className="border-b border-[#27272A] bg-[#141416] px-4 py-4 md:hidden">
+            <nav className="flex flex-col gap-3 text-sm font-medium text-[#A1A1AA]">
+              <button
+                onClick={() => scrollToSection("downloader")}
+                className="text-left py-2 hover:text-white"
+              >
+                Reels Downloader
+              </button>
+              <button
+                onClick={() => scrollToSection("downloader")}
+                className="text-left py-2 hover:text-white"
+              >
+                Videos
+              </button>
+              <button
+                onClick={() => scrollToSection("downloader")}
+                className="text-left py-2 hover:text-white"
+              >
+                Photos
+              </button>
+              <button
+                onClick={() => scrollToSection("how-it-works")}
+                className="text-left py-2 hover:text-white"
+              >
+                How It Works
+              </button>
+              <button
+                onClick={() => scrollToSection("faq")}
+                className="text-left py-2 hover:text-white"
+              >
+                FAQ
+              </button>
+              <div className="pt-2 border-t border-[#27272A] flex flex-col gap-2">
+                <Button
+                  onClick={() => {
+                    scrollToSection("downloader");
+                    inputRef.current?.focus();
+                  }}
+                  className="w-full h-11 rounded-xl bg-[#6366F1] hover:bg-[#4F46E5] text-white font-semibold"
                 >
-                  {downloading ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Download className="size-4" />
-                  )}
-                  {downloading ? "Preparing your video…" : "Download video"}
-                 </Button>
+                  Get Started
+                </Button>
               </div>
+            </nav>
+          </div>
+        )}
+      </header>
+
+      {/* 3. HERO & DOWNLOADER CARD */}
+      <section id="downloader" className="relative py-14 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-4xl text-center">
+          {/* Main Headline (approx 2 lines on desktop) */}
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-[1.12]">
+            Instagram Reels.
+            <br />
+            Saved in seconds.
+          </h1>
+
+          {/* Supporting line */}
+          <p className="mx-auto mt-4 max-w-xl text-base sm:text-lg text-[#A1A1AA] leading-relaxed">
+            Paste an Instagram link and download your favorite public reels quickly and easily.
+          </p>
+
+          {/* Downloader Card */}
+          <div className="mt-10 rounded-2xl border border-[#27272A] bg-[#141416] p-4 sm:p-6 shadow-2xl text-left">
+            <label
+              htmlFor="insta-url"
+              className="block text-xs font-semibold uppercase tracking-wider text-[#A1A1AA] mb-2.5"
+            >
+              Paste Instagram URL
+            </label>
+
+            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <input
+                  id="insta-url"
+                  ref={inputRef}
+                  type="text"
+                  value={url}
+                  onChange={(e) => {
+                    setUrl(e.target.value);
+                    if (error) setError(null);
+                  }}
+                  placeholder="🔗 Paste Instagram link here..."
+                  aria-label="Instagram post or reel URL"
+                  className="w-full h-[52px] rounded-xl border border-[#27272A] bg-[#0B0B0D] px-4 pr-10 text-sm sm:text-base text-white placeholder:text-[#A1A1AA]/60 outline-none focus:border-[#6366F1] focus:ring-1 focus:ring-[#6366F1] transition"
+                />
+                {url ? (
+                  <button
+                    type="button"
+                    onClick={() => setUrl("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-[#A1A1AA] hover:text-white"
+                    title="Clear input"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handlePaste}
+                    className="hidden sm:flex absolute right-3 top-1/2 -translate-y-1/2 items-center gap-1 text-xs text-[#A1A1AA] hover:text-white px-2 py-1 rounded bg-[#1A1A1D] border border-[#27272A]"
+                    title="Paste from clipboard"
+                  >
+                    Paste
+                  </button>
+                )}
+              </div>
+
+              {/* Primary CTA Button: "Download Reel" */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="h-[52px] px-8 rounded-xl bg-[#6366F1] hover:bg-[#4F46E5] text-white font-semibold text-base transition flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed shrink-0"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span>Finding your Reel...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-5 w-5" />
+                    <span>Download Reel</span>
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Error state */}
+            {error && (
+              <div className="mt-3.5 flex items-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-3.5 py-2.5 text-xs sm:text-sm text-red-400">
+                <span className="font-semibold">Error:</span>
+                <span>{error}</span>
+                {error.includes("RapidAPI") && (
+                  <button
+                    type="button"
+                    onClick={() => setSettingsOpen(true)}
+                    className="ml-auto underline font-medium text-white hover:text-red-200"
+                  >
+                    Enter Key
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Subtle microcopy */}
+            <div className="mt-4 flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-[#A1A1AA]">
+              <span>✓ No Instagram login required</span>
+              <span>✓ Public content only</span>
+              <span>✓ Fast &amp; simple</span>
             </div>
           </div>
-        </section>
-      )}
 
-      <section className="py-16">
-        <p className="font-mono text-[10px] uppercase text-accent">Pipeline</p>
-        <h2 className="mt-3 text-3xl font-semibold">Three steps, start to file</h2>
-        <div className="mt-8 grid gap-4 sm:grid-cols-3">
-        {[
-          { icon: Link2, title: "Copy the link", text: "Share the reel, post, IGTV, or story and choose Copy link." },
-          { icon: Zap, title: "Analyze the link", text: "Paste it above to resolve the creator, duration, and media type." },
-          { icon: Download, title: "Download the video", text: "Review the preview, then save the source-quality MP4." },
-        ].map((item) => (
-          <div key={item.title} className="glass-panel rounded-lg p-6">
-            <div className="flex items-center justify-between"><item.icon className="size-5 text-accent" /><Check className="size-3.5 text-muted-foreground" /></div>
-            <h2 className="font-display mt-3 text-base font-semibold">{item.title}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{item.text}</p>
-          </div>
-        ))}
+          {/* 5. DOWNLOAD RESULT / PREVIEW CARD */}
+          {result && (
+            <div
+              ref={resultRef}
+              className="mt-8 animate-fade-in rounded-2xl border border-[#27272A] bg-[#141416] p-5 sm:p-7 text-left shadow-2xl"
+            >
+              <div className="flex items-center justify-between border-b border-[#27272A] pb-4 mb-6">
+                <div className="flex items-center gap-2 text-sm font-semibold text-[#10B981]">
+                  <CheckCircle2 className="h-5 w-5" />
+                  <span>Reel found ✓</span>
+                </div>
+                <span className="text-xs text-[#A1A1AA] bg-[#1A1A1D] px-2.5 py-1 rounded-md border border-[#27272A]">
+                  Public Instagram content
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-[minmax(0,280px)_1fr] gap-6 items-start">
+                {/* LARGE VIDEO / IMAGE THUMBNAIL */}
+                <div className="relative aspect-[9/16] max-h-[380px] w-full rounded-xl overflow-hidden bg-[#0B0B0D] border border-[#27272A] flex items-center justify-center">
+                  {!imageError && (result.thumbnail || result.videoUrl) ? (
+                    result.isVideo ? (
+                      <video
+                        src={proxyUrl(result.videoUrl, "preview", false, true)}
+                        poster={result.thumbnail ?? undefined}
+                        controls
+                        playsInline
+                        preload="metadata"
+                        onError={() => setImageError(true)}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <img
+                        src={proxyUrl(result.videoUrl, "preview", true, true)}
+                        alt={`Photo by @${result.creator}`}
+                        onError={() => setImageError(true)}
+                        className="h-full w-full object-cover"
+                      />
+                    )
+                  ) : (
+                    <div className="text-center p-4">
+                      <Film className="h-8 w-8 text-[#A1A1AA] mx-auto mb-2 opacity-50" />
+                      <p className="text-xs text-[#A1A1AA]">Preview unavailable</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Info and Download Options */}
+                <div className="flex flex-col justify-between h-full space-y-5">
+                  <div className="space-y-2.5">
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={`https://www.instagram.com/${result.creator}/`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-base font-bold text-white hover:text-[#6366F1] transition flex items-center gap-1"
+                      >
+                        @{result.creator}
+                        <ExternalLink className="h-3.5 w-3.5 text-[#A1A1AA]" />
+                      </a>
+                    </div>
+
+                    <p className="text-sm font-medium text-[#A1A1AA]">
+                      {getMediaLabel(result.kind, result.isVideo)}
+                      {formatDuration(duration ?? result.duration) && (
+                        <span> · {formatDuration(duration ?? result.duration)}</span>
+                      )}
+                    </p>
+
+                    {result.caption && (
+                      <p className="text-xs text-[#A1A1AA] line-clamp-3 leading-relaxed mt-2 bg-[#0B0B0D] p-3 rounded-lg border border-[#27272A]">
+                        {result.caption}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Quality Options */}
+                  <div className="space-y-2 pt-2">
+                    <label className="text-xs font-semibold text-[#A1A1AA] uppercase tracking-wider block">
+                      Quality
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {["Original", "1080p", "720p"].map((q) => (
+                        <button
+                          key={q}
+                          type="button"
+                          onClick={() => setSelectedQuality(q)}
+                          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold border transition ${
+                            selectedQuality === q
+                              ? "bg-[#6366F1] border-[#6366F1] text-white"
+                              : "bg-[#1A1A1D] border-[#27272A] text-[#A1A1AA] hover:text-white"
+                          }`}
+                        >
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Primary & Secondary Download Buttons */}
+                  <div className="pt-2 space-y-2.5">
+                    <button
+                      onClick={handleDownload}
+                      disabled={downloading}
+                      className="w-full h-[52px] rounded-xl bg-[#6366F1] hover:bg-[#4F46E5] text-white font-semibold text-base transition flex items-center justify-center gap-2 shadow-lg disabled:opacity-60"
+                    >
+                      {downloading ? (
+                        <>
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                          <span>Preparing your download...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="h-5 w-5" />
+                          <span>{result.isVideo ? "Download MP4" : "Download JPG"}</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleReset}
+                      className="w-full h-11 rounded-xl border border-[#27272A] bg-[#1A1A1D] hover:bg-[#27272A] text-xs font-semibold text-[#A1A1AA] hover:text-white transition"
+                    >
+                      Try another link
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
-      <footer className="grid grid-cols-1 gap-3 border-t border-border py-7 font-mono text-[10px] uppercase text-muted-foreground sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center sm:justify-between">
-        <span>ReelVault // stable build</span><span className="flex min-w-0 items-center gap-2 sm:justify-end">Only download content you have the right to use
-        <ArrowRight className="size-3" />
-        </span>
+      {/* 6. SUPPORTED CONTENT TYPES */}
+      <section className="py-16 sm:py-20 border-t border-[#27272A] px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-5xl">
+          <div className="text-center">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+              More than just Reels.
+            </h2>
+            <p className="mt-2 text-sm sm:text-base text-[#A1A1AA]">
+              Download supported public Instagram content from one simple place.
+            </p>
+          </div>
+
+          <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              {
+                icon: Film,
+                title: "REELS",
+                desc: "Download public Instagram Reels.",
+              },
+              {
+                icon: Video,
+                title: "VIDEOS",
+                desc: "Save public Instagram videos.",
+              },
+              {
+                icon: ImageIcon,
+                title: "PHOTOS",
+                desc: "Download public Instagram photos.",
+              },
+              {
+                icon: Sparkles,
+                title: "STORIES",
+                desc: "Download supported public Instagram Stories.",
+              },
+            ].map((item) => (
+              <div
+                key={item.title}
+                className="clean-card p-6 flex flex-col justify-between hover:border-[#3F3F46] transition group"
+              >
+                <div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#1A1A1D] border border-[#27272A] text-[#6366F1] group-hover:border-[#6366F1]/50 transition">
+                    <item.icon className="h-5 w-5" />
+                  </div>
+                  <h3 className="mt-4 font-mono text-xs font-bold tracking-wider text-white">
+                    {item.title}
+                  </h3>
+                  <p className="mt-1 text-sm text-[#A1A1AA] leading-relaxed">{item.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 7. HOW IT WORKS */}
+      <section id="how-it-works" className="py-16 sm:py-20 border-t border-[#27272A] px-4 sm:px-6 lg:px-8 bg-[#0E0E11]">
+        <div className="mx-auto max-w-5xl">
+          <div className="text-center">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+              How ReelVault works
+            </h2>
+            <p className="mt-2 text-sm sm:text-base text-[#A1A1AA]">
+              Three simple steps. That's it.
+            </p>
+          </div>
+
+          <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              {
+                step: "Step 01",
+                title: "Copy",
+                desc: "Copy the link to the public Instagram post or Reel.",
+              },
+              {
+                step: "Step 02",
+                title: "Paste",
+                desc: "Paste the link into ReelVault.",
+              },
+              {
+                step: "Step 03",
+                title: "Download",
+                desc: "Preview your media and download it.",
+              },
+            ].map((item) => (
+              <div
+                key={item.step}
+                className="clean-card p-6 flex flex-col justify-between text-left"
+              >
+                <div>
+                  <span className="font-mono text-xs font-bold text-[#6366F1]">{item.step}</span>
+                  <h3 className="mt-2 text-xl font-bold text-white">{item.title}</h3>
+                  <p className="mt-2 text-sm text-[#A1A1AA] leading-relaxed">{item.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 8. WHY REELVAULT (Simple by design) */}
+      <section className="py-16 sm:py-20 border-t border-[#27272A] px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-5xl">
+          <div className="text-center">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+              Simple by design.
+            </h2>
+          </div>
+
+          <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              {
+                icon: Zap,
+                title: "FAST",
+                desc: "Get to your download without unnecessary steps.",
+              },
+              {
+                icon: Lock,
+                title: "NO LOGIN",
+                desc: "We never ask for your Instagram password.",
+              },
+              {
+                icon: Shield,
+                title: "HIGH QUALITY",
+                desc: "Download available media in the best supported quality.",
+              },
+              {
+                icon: Smartphone,
+                title: "MOBILE FRIENDLY",
+                desc: "Designed to work smoothly on phones, tablets and desktops.",
+              },
+            ].map((item) => (
+              <div key={item.title} className="clean-card p-6 text-left">
+                <item.icon className="h-5 w-5 text-[#6366F1]" />
+                <h3 className="mt-4 font-mono text-xs font-bold tracking-wider text-white">
+                  {item.title}
+                </h3>
+                <p className="mt-1 text-sm text-[#A1A1AA] leading-relaxed">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 9. TRUST / PRIVACY SECTION */}
+      <section className="py-16 sm:py-20 border-t border-[#27272A] px-4 sm:px-6 lg:px-8 bg-[#0E0E11]">
+        <div className="mx-auto max-w-3xl text-center">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-[#27272A] bg-[#141416] px-3.5 py-1 text-xs font-medium text-[#A1A1AA] mb-4">
+            <Shield className="h-3.5 w-3.5 text-[#10B981]" />
+            <span>Public content only.</span>
+          </div>
+
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+            Your Instagram password is never needed.
+          </h2>
+
+          <p className="mt-4 text-sm sm:text-base text-[#A1A1AA] leading-relaxed">
+            ReelVault works with public Instagram links. We do not ask you to log in to Instagram to
+            use the downloader.
+          </p>
+
+          <p className="mt-3 text-xs sm:text-sm text-[#A1A1AA]/80 leading-relaxed">
+            Links are processed only as needed to provide the download and are not intentionally
+            stored as a personal media library.
+          </p>
+        </div>
+      </section>
+
+      {/* 10. FAQ SECTION */}
+      <section id="faq" className="py-16 sm:py-20 border-t border-[#27272A] px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-3xl">
+          <div className="text-center mb-10">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+              Frequently Asked Questions
+            </h2>
+          </div>
+
+          <Accordion type="single" collapsible className="space-y-3">
+            {[
+              {
+                q: "1. What is ReelVault?",
+                a: "ReelVault is a simple tool for downloading supported media from public Instagram links.",
+              },
+              {
+                q: "2. Do I need to log in to Instagram?",
+                a: "No. ReelVault does not require your Instagram username or password.",
+              },
+              {
+                q: "3. What can I download?",
+                a: "You can download supported public Instagram Reels, videos, photos and Stories.",
+              },
+              {
+                q: "4. Can I download private Instagram content?",
+                a: "No. ReelVault is designed for publicly accessible content and does not provide access to private accounts.",
+              },
+              {
+                q: "5. Is ReelVault free?",
+                a: "Yes, the basic downloader is free to use.",
+              },
+              {
+                q: "6. Why isn't my link working?",
+                a: "Make sure you're using a valid, publicly accessible Instagram URL. Some content may not be supported or may be unavailable.",
+              },
+              {
+                q: "7. Where are downloaded files saved?",
+                a: "They are saved to your device according to your browser's normal download settings.",
+              },
+              {
+                q: "8. Does ReelVault store my Instagram password?",
+                a: "No. ReelVault does not require your Instagram password.",
+              },
+            ].map((faq, i) => (
+              <AccordionItem
+                key={i}
+                value={`faq-${i}`}
+                className="rounded-xl border border-[#27272A] bg-[#141416] px-5 overflow-hidden"
+              >
+                <AccordionTrigger className="text-sm sm:text-base font-semibold text-white hover:no-underline py-4 text-left">
+                  {faq.q}
+                </AccordionTrigger>
+                <AccordionContent className="text-sm text-[#A1A1AA] pb-4 leading-relaxed">
+                  {faq.a}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </div>
+      </section>
+
+      {/* 11. RESPONSIBLE USE */}
+      <div className="border-t border-[#27272A] px-4 py-8 bg-[#0E0E11]">
+        <p className="mx-auto max-w-4xl text-center text-xs text-[#A1A1AA]/80 leading-relaxed">
+          ReelVault is intended for downloading publicly available content that you have permission
+          to save or use. Please respect creators' rights, Instagram's terms, and applicable
+          copyright laws.
+        </p>
+      </div>
+
+      {/* 12. FOOTER */}
+      <footer className="border-t border-[#27272A] bg-[#0B0B0D] py-12 sm:py-16 px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-6xl">
+          <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr_1fr_1fr] gap-8 pb-12">
+            {/* Brand Left */}
+            <div>
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#141416] border border-[#27272A] text-[#6366F1]">
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-4 w-4 fill-none stroke-current stroke-[2]"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect width="18" height="18" x="3" y="3" rx="4" />
+                    <path d="M12 8v8" />
+                    <path d="m8 12 4 4 4-4" />
+                  </svg>
+                </div>
+                <span className="text-base font-bold text-white">ReelVault</span>
+              </div>
+              <p className="mt-3 font-semibold text-sm text-white">"Your reels. Your vault."</p>
+              <p className="mt-1 text-xs text-[#A1A1AA] leading-relaxed max-w-xs">
+                A simple downloader for supported public Instagram content.
+              </p>
+            </div>
+
+            {/* Column 1: Tools */}
+            <div>
+              <h4 className="font-mono text-xs font-bold uppercase tracking-wider text-white mb-3">
+                Tools
+              </h4>
+              <ul className="space-y-2 text-xs text-[#A1A1AA]">
+                <li>
+                  <button onClick={() => scrollToSection("downloader")} className="hover:text-white transition">
+                    Instagram Reels
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => scrollToSection("downloader")} className="hover:text-white transition">
+                    Instagram Videos
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => scrollToSection("downloader")} className="hover:text-white transition">
+                    Instagram Photos
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => scrollToSection("downloader")} className="hover:text-white transition">
+                    Instagram Stories
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            {/* Column 2: Company */}
+            <div>
+              <h4 className="font-mono text-xs font-bold uppercase tracking-wider text-white mb-3">
+                Company
+              </h4>
+              <ul className="space-y-2 text-xs text-[#A1A1AA]">
+                <li>
+                  <button onClick={() => scrollToSection("downloader")} className="hover:text-white transition">
+                    About
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => scrollToSection("how-it-works")} className="hover:text-white transition">
+                    How It Works
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => scrollToSection("faq")} className="hover:text-white transition">
+                    FAQ
+                  </button>
+                </li>
+                <li>
+                  <a href="#faq" className="hover:text-white transition">
+                    Contact
+                  </a>
+                </li>
+              </ul>
+            </div>
+
+            {/* Column 3: Legal */}
+            <div>
+              <h4 className="font-mono text-xs font-bold uppercase tracking-wider text-white mb-3">
+                Legal
+              </h4>
+              <ul className="space-y-2 text-xs text-[#A1A1AA]">
+                <li>
+                  <a href="#privacy" className="hover:text-white transition">
+                    Privacy Policy
+                  </a>
+                </li>
+                <li>
+                  <a href="#terms" className="hover:text-white transition">
+                    Terms of Use
+                  </a>
+                </li>
+                <li>
+                  <a href="#responsible-use" className="hover:text-white transition">
+                    Responsible Use
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="border-t border-[#27272A] pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#A1A1AA]">
+            <span>© 2026 ReelVault. All rights reserved.</span>
+            <span>Fast, clean, consumer utility.</span>
+          </div>
+        </div>
       </footer>
-    </main>
+    </div>
   );
 }

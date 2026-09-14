@@ -1,23 +1,26 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-export type MediaKind = "reel" | "post" | "igtv" | "story" | "unknown";
+export type MediaKind = "reel" | "post" | "igtv" | "story" | "photo" | "unknown";
 
 export type AnalyzeResult = {
   kind: MediaKind;
+  isVideo: boolean;
   creator: string;
   creatorName: string;
   caption: string | null;
   thumbnail: string | null;
   videoUrl: string;
   duration: number | null;
-
   likes: number | null;
   comments: number | null;
   postedAt: string | null;
 };
 
-const inputSchema = z.object({ url: z.string().trim().min(5).max(500) });
+const inputSchema = z.object({
+  url: z.string().trim().min(5).max(500),
+  apiKey: z.string().trim().optional(),
+});
 
 export function detectKind(url: string): MediaKind {
   const u = url.toLowerCase();
@@ -167,13 +170,17 @@ async function fetchPageDetails(link: string) {
 }
 
 export const analyzeLink = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => inputSchema.parse(data))
+  .validator((data: unknown) => inputSchema.parse(data))
   .handler(async ({ data }): Promise<AnalyzeResult> => {
-    const key = process.env["RAPIDAPI_KEY"];
+    const key = data.apiKey?.trim() || process.env["RAPIDAPI_KEY"];
     const host =
       process.env["RAPIDAPI_HOST"] ||
       "instagram-downloader-scraper-reels-igtv-posts-stories.p.rapidapi.com";
-    if (!key) throw new Error("The download service is not configured yet.");
+    if (!key) {
+      throw new Error(
+        "RapidAPI Key is not configured yet. Please enter your RapidAPI Key in Settings or set RAPIDAPI_KEY in your .env file.",
+      );
+    }
 
     let link: string;
     try {
@@ -211,29 +218,33 @@ export const analyzeLink = createServerFn({ method: "POST" })
     }
 
     const items = payload.data ?? [];
-    const video = items.find((item) => item.isVideo && item.media) ?? items.find((item) => item.media);
-    if (!video?.media) {
-      throw new Error("No video found at that link — it may be a photo-only post.");
+    const mediaItem =
+      items.find((item) => item.isVideo && item.media) ??
+      items.find((item) => item.media) ??
+      items[0];
+
+    if (!mediaItem?.media) {
+      throw new Error("No media found at that link — it may be private or unavailable.");
     }
-    if (!video.isVideo) {
-      throw new Error("That link is a photo, not a video.");
-    }
+
+    const isVideo = Boolean(mediaItem.isVideo);
+    const resolvedKind = !isVideo && kind === "post" ? "photo" : kind;
 
     const [details, duration] = await Promise.all([
       fetchPageDetails(link),
-      readDuration(video.media),
+      isVideo ? readDuration(mediaItem.media) : Promise.resolve(null),
     ]);
 
     return {
-      kind,
+      kind: resolvedKind,
+      isVideo,
       creator: details.creator ?? "instagram",
-      creatorName: details.creatorName ?? details.creator ?? "Unknown creator",
+      creatorName: details.creatorName ?? details.creator ?? "Instagram Creator",
       caption: details.caption,
-      thumbnail: video.thumb ?? details.thumbnail ?? null,
-      videoUrl: video.media,
+      thumbnail: mediaItem.thumb ?? details.thumbnail ?? (isVideo ? null : mediaItem.media),
+      videoUrl: mediaItem.media,
       duration,
       likes: details.likes,
-
       comments: details.comments,
       postedAt: details.postedAt,
     };
