@@ -20,8 +20,10 @@ export const Route = createFileRoute("/api/public/download")({
           return new Response("Invalid url", { status: 400 });
         }
 
-        const allowed = /(^|\.)(cdninstagram\.com|fbcdn\.net|instagram\.com|akamaihd\.net|rapidapi\.com)$/i;
-        if (parsed.protocol !== "https:" || !allowed.test(parsed.hostname)) {
+        const isLocal = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+        const isAllowedProto = parsed.protocol === "https:" || (isLocal && parsed.protocol === "http:");
+        const allowed = /(^|\.)(cdninstagram\.com|fbcdn\.net|instagram\.com|akamaihd\.net|rapidapi\.com|localhost|127\.0\.0\.1)$/i;
+        if (!isAllowedProto || !allowed.test(parsed.hostname)) {
           return new Response("Host not allowed", { status: 400 });
         }
 
@@ -43,14 +45,15 @@ export const Route = createFileRoute("/api/public/download")({
         }
 
         const inline = requestUrl.searchParams.get("mode") === "inline";
-        const contentType = upstream.headers.get("content-type") || "video/mp4";
         const isImage =
           requestUrl.searchParams.get("type") === "image" ||
-          contentType.startsWith("image/");
+          (upstream.headers.get("content-type") || "").startsWith("image/");
         const ext = isImage ? "jpg" : "mp4";
 
         const responseHeaders: Record<string, string> = {
-          "content-type": contentType,
+          "content-type": inline
+            ? (isImage ? "image/jpeg" : "video/mp4")
+            : "application/octet-stream",
           "content-disposition": inline
             ? "inline"
             : `attachment; filename="${name}.${ext}"`,

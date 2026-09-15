@@ -237,35 +237,51 @@ export async function downloadMedia(url: string, quality?: string): Promise<Down
 }
 
 /**
- * Triggers the browser download for the given direct media stream URL.
- * Attempts to download as a blob to force saving directly to disk, with fallback.
+ * Forces the browser to immediately download the media file to the user's
+ * computer without opening or playing the video in the browser player.
  */
 export async function triggerBrowserDownload(downloadUrl: string, filename?: string): Promise<void> {
   if (!downloadUrl) return;
   const safeFilename = filename || "instagram-media.mp4";
+  const isImage = safeFilename.endsWith(".jpg") || safeFilename.endsWith(".jpeg") || safeFilename.endsWith(".png");
+  const cleanBaseName = safeFilename.replace(/\.[a-zA-Z0-9]+$/, "");
 
+  // Strategy 1: Client-side fetch as a Blob
+  // Because blob URLs are same-origin (blob:http://localhost:8080/...), the HTML5 download attribute
+  // is strictly enforced by Chrome/Edge/Safari, which instantly saves the file to disk without playing.
   try {
     const res = await fetch(downloadUrl);
     if (res.ok) {
       const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
+      const downloadBlob = new Blob([blob], {
+        type: isImage ? (blob.type || "image/jpeg") : "application/octet-stream",
+      });
+      const blobUrl = URL.createObjectURL(downloadBlob);
       const link = document.createElement("a");
       link.href = blobUrl;
       link.download = safeFilename;
+      link.style.display = "none";
       document.body.appendChild(link);
       link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+      setTimeout(() => {
+        URL.revokeObjectURL(blobUrl);
+        link.remove();
+      }, 15000);
       return;
     }
-  } catch {
-    // Network or CORS restriction on direct blob fetch - use anchor fallback
+  } catch (err) {
+    console.warn("Direct blob download restricted by CORS, falling back to attachment proxy:", err);
   }
 
-  const link = document.createElement("a");
-  link.href = downloadUrl;
-  link.download = safeFilename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
+  // Strategy 2: Same-origin streaming proxy with Content-Disposition: attachment
+  // Sends Content-Disposition: attachment & Content-Type: application/octet-stream
+  // The browser CANNOT play this inline; it is forced to save directly to the Downloads folder.
+  const proxyEndpoint = `/api/public/download?url=${encodeURIComponent(downloadUrl)}&name=${encodeURIComponent(cleanBaseName)}${isImage ? "&type=image" : ""}`;
+  const proxyLink = document.createElement("a");
+  proxyLink.href = proxyEndpoint;
+  proxyLink.download = safeFilename;
+  proxyLink.style.display = "none";
+  document.body.appendChild(proxyLink);
+  proxyLink.click();
+  setTimeout(() => proxyLink.remove(), 2000);
 }
