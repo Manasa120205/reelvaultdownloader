@@ -10,11 +10,35 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ContactRouteImport } from './routes/contact'
+import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
+import { Route as ResponsibleUseRouteImport } from './routes/responsible-use'
+import { Route as TermsOfUseRouteImport } from './routes/terms-of-use'
 import { Route as ApiPublicDownloadRouteImport } from './routes/api/public/download'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContactRoute = ContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyPolicyRoute = PrivacyPolicyRouteImport.update({
+  id: '/privacy-policy',
+  path: '/privacy-policy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResponsibleUseRoute = ResponsibleUseRouteImport.update({
+  id: '/responsible-use',
+  path: '/responsible-use',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsOfUseRoute = TermsOfUseRouteImport.update({
+  id: '/terms-of-use',
+  path: '/terms-of-use',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicDownloadRoute = ApiPublicDownloadRouteImport.update({
@@ -25,27 +49,62 @@ const ApiPublicDownloadRoute = ApiPublicDownloadRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/contact': typeof ContactRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
+  '/responsible-use': typeof ResponsibleUseRoute
+  '/terms-of-use': typeof TermsOfUseRoute
   '/api/public/download': typeof ApiPublicDownloadRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/contact': typeof ContactRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
+  '/responsible-use': typeof ResponsibleUseRoute
+  '/terms-of-use': typeof TermsOfUseRoute
   '/api/public/download': typeof ApiPublicDownloadRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/contact': typeof ContactRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
+  '/responsible-use': typeof ResponsibleUseRoute
+  '/terms-of-use': typeof TermsOfUseRoute
   '/api/public/download': typeof ApiPublicDownloadRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/public/download'
+  fullPaths:
+    | '/'
+    | '/contact'
+    | '/privacy-policy'
+    | '/responsible-use'
+    | '/terms-of-use'
+    | '/api/public/download'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/public/download'
-  id: '__root__' | '/' | '/api/public/download'
+  to:
+    | '/'
+    | '/contact'
+    | '/privacy-policy'
+    | '/responsible-use'
+    | '/terms-of-use'
+    | '/api/public/download'
+  id:
+    | '__root__'
+    | '/'
+    | '/contact'
+    | '/privacy-policy'
+    | '/responsible-use'
+    | '/terms-of-use'
+    | '/api/public/download'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ContactRoute: typeof ContactRoute
+  PrivacyPolicyRoute: typeof PrivacyPolicyRoute
+  ResponsibleUseRoute: typeof ResponsibleUseRoute
+  TermsOfUseRoute: typeof TermsOfUseRoute
   ApiPublicDownloadRoute: typeof ApiPublicDownloadRoute
 }
 
@@ -56,6 +115,34 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contact': {
+      id: '/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy-policy': {
+      id: '/privacy-policy'
+      path: '/privacy-policy'
+      fullPath: '/privacy-policy'
+      preLoaderRoute: typeof PrivacyPolicyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/responsible-use': {
+      id: '/responsible-use'
+      path: '/responsible-use'
+      fullPath: '/responsible-use'
+      preLoaderRoute: typeof ResponsibleUseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms-of-use': {
+      id: '/terms-of-use'
+      path: '/terms-of-use'
+      fullPath: '/terms-of-use'
+      preLoaderRoute: typeof TermsOfUseRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/download': {
@@ -70,6 +157,10 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ContactRoute: ContactRoute,
+  PrivacyPolicyRoute: PrivacyPolicyRoute,
+  ResponsibleUseRoute: ResponsibleUseRoute,
+  TermsOfUseRoute: TermsOfUseRoute,
   ApiPublicDownloadRoute: ApiPublicDownloadRoute,
 }
 export const routeTree = rootRouteImport
