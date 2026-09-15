@@ -199,7 +199,7 @@ export async function downloadMedia(url: string, quality?: string): Promise<Down
     throw new PublicMediaApiError("Received an invalid response from media server.", "INVALID_RESPONSE", res.status);
   }
 
-  if (!res.ok || !data.success) {
+  if (!res.ok || !data || !data.success) {
     const rawError = data?.error;
     const code =
       data?.code ||
@@ -213,14 +213,37 @@ export async function downloadMedia(url: string, quality?: string): Promise<Down
     throw new PublicMediaApiError(formatUserErrorMessage(code, message), code, res.status);
   }
 
-  return data as DownloadSuccessResponse;
+  const normalized: DownloadSuccessResponse = {
+    success: true,
+    requestId: data.requestId || data.data?.requestId,
+    downloadUrl:
+      data.downloadUrl ||
+      data.download_url ||
+      data.url ||
+      data.data?.downloadUrl ||
+      data.data?.url ||
+      "",
+    filename:
+      data.filename ||
+      data.fileName ||
+      data.file_name ||
+      data.data?.filename ||
+      "instagram-media.mp4",
+    type: data.type || data.mediaType || data.data?.type || "reel",
+    quota: data.quota || data.data?.quota,
+  };
+
+  return normalized;
 }
 
 /**
  * Triggers the browser download for the given direct media stream URL.
  * Attempts to download as a blob to force saving directly to disk, with fallback.
  */
-export async function triggerBrowserDownload(downloadUrl: string, filename: string): Promise<void> {
+export async function triggerBrowserDownload(downloadUrl: string, filename?: string): Promise<void> {
+  if (!downloadUrl) return;
+  const safeFilename = filename || "instagram-media.mp4";
+
   try {
     const res = await fetch(downloadUrl);
     if (res.ok) {
@@ -228,7 +251,7 @@ export async function triggerBrowserDownload(downloadUrl: string, filename: stri
       const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = blobUrl;
-      link.download = filename || "instagram-media.mp4";
+      link.download = safeFilename;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -241,7 +264,7 @@ export async function triggerBrowserDownload(downloadUrl: string, filename: stri
 
   const link = document.createElement("a");
   link.href = downloadUrl;
-  link.download = filename || "instagram-media.mp4";
+  link.download = safeFilename;
   document.body.appendChild(link);
   link.click();
   link.remove();

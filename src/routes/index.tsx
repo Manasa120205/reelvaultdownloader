@@ -65,13 +65,16 @@ export const Route = createFileRoute("/")({
   component: HomePage,
 });
 
-function getMediaLabel(type: string): string {
+function getMediaLabel(type?: string | null): string {
+  if (!type) return "Instagram Reel";
   switch (type.toLowerCase()) {
     case "reel":
       return "Instagram Reel";
     case "story":
       return "Instagram Story";
     case "post":
+    case "photo":
+    case "image":
       return "Instagram Post / Photo";
     case "video":
       return "Instagram Video";
@@ -159,19 +162,42 @@ function HomePage() {
     if (!result || downloading) return;
     setDownloading(true);
 
-    const isVideo = result.type.toLowerCase() !== "post" && result.type.toLowerCase() !== "photo";
-    const quality = qualityToDownload || selectedQuality;
+    const mediaType = (result?.type || "").toLowerCase();
+    const isVideo = mediaType !== "post" && mediaType !== "photo" && mediaType !== "image";
+    const quality = qualityToDownload || selectedQuality || "Original";
 
     try {
       const downloadData = await downloadMedia(url.trim(), quality);
 
-      // Add quality tag to filename if missing
-      let finalFilename = downloadData.filename;
-      if (isVideo && quality && !finalFilename.includes(quality)) {
+      const rawUrl =
+        downloadData?.downloadUrl ||
+        (downloadData as any)?.download_url ||
+        (downloadData as any)?.url ||
+        (downloadData as any)?.data?.downloadUrl ||
+        (downloadData as any)?.data?.url ||
+        "";
+
+      let finalFilename: string =
+        downloadData?.filename ||
+        (downloadData as any)?.fileName ||
+        (downloadData as any)?.file_name ||
+        (downloadData as any)?.data?.filename ||
+        (isVideo ? `instagram-reel-${quality}.mp4` : "instagram-photo.jpg");
+
+      if (
+        isVideo &&
+        quality &&
+        typeof finalFilename === "string" &&
+        !finalFilename.toLowerCase().includes(quality.toLowerCase())
+      ) {
         finalFilename = finalFilename.replace(/(\.[\w\d]+)$/i, `_${quality}$1`);
       }
 
-      await triggerBrowserDownload(downloadData.downloadUrl, finalFilename);
+      if (!rawUrl) {
+        throw new Error("No download stream URL was returned from the server.");
+      }
+
+      await triggerBrowserDownload(rawUrl, finalFilename);
 
       toast.success(
         isVideo ? `${quality} Reel download started` : "Photo download started"
