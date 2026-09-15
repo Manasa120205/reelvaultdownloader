@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
 import {
   CheckCircle2,
@@ -26,7 +25,12 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { analyzeLink, type AnalyzeResult, type MediaKind } from "@/lib/instagram.functions";
+import {
+  analyzeMedia,
+  downloadMedia,
+  triggerBrowserDownload,
+  type AnalyzeSuccessResponse,
+} from "@/lib/publicMediaApi";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -61,29 +65,30 @@ export const Route = createFileRoute("/")({
   component: HomePage,
 });
 
-function proxyUrl(videoUrl: string, name: string, isImage: boolean, inline: boolean) {
-  return `/api/public/download?name=${encodeURIComponent(name)}&url=${encodeURIComponent(videoUrl)}${
-    inline ? "&mode=inline" : ""
-  }${isImage ? "&type=image" : ""}`;
-}
-
-function formatDuration(seconds: number | null) {
-  if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return null;
-  const total = Math.round(seconds);
-  const m = Math.floor(total / 60);
-  const s = String(total % 60).padStart(2, "0");
-  return `${m}:${s}`;
+function getMediaLabel(type?: string | null): string {
+  if (!type) return "Instagram Reel";
+  switch (type.toLowerCase()) {
+    case "reel":
+      return "Instagram Reel";
+    case "story":
+      return "Instagram Story";
+    case "post":
+    case "photo":
+    case "image":
+      return "Instagram Post / Photo";
+    case "video":
+      return "Instagram Video";
+    default:
+      return `Instagram ${type.charAt(0).toUpperCase() + type.slice(1)}`;
+  }
 }
 
 function HomePage() {
-  const analyze = useServerFn(analyzeLink);
-
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<AnalyzeResult | null>(null);
-  const [duration, setDuration] = useState<number | null>(null);
+  const [result, setResult] = useState<AnalyzeSuccessResponse | null>(null);
   const [selectedQuality, setSelectedQuality] = useState("Original");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -125,71 +130,92 @@ function HomePage() {
     }
 
     if (!validateInstagramUrl(cleanUrl)) {
-      setError("Please enter a valid Instagram link.");
+      setError("Please enter a valid Instagram link (e.g. https://www.instagram.com/reel/...).");
       return;
     }
 
     setLoading(true);
     setError(null);
     setResult(null);
-    setDuration(null);
     setImageError(false);
 
     try {
-      const data = await analyze({
-        data: {
-          url: cleanUrl,
-        },
-      });
-
+      const data = await analyzeMedia(cleanUrl);
       setResult(data);
-      setDuration(data.duration);
 
       setTimeout(() => {
         resultRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       }, 100);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "";
-      if (msg.includes("valid Instagram link")) {
-        setError("Please enter a valid Instagram link.");
-      } else if (msg.includes("quota") || msg.includes("RapidAPI") || msg.includes("RAPIDAPI_KEY") || msg.includes("Server configuration")) {
-        setError(msg);
-      } else {
-        setError("Unable to analyze this Reel. Please check the link and try again.");
-      }
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Unable to analyze this Reel. Please check the link and try again.";
+      setError(msg);
     } finally {
       setLoading(false);
     }
   }
 
-  // STEP 4: Download action (only triggered when user clicks "Download Reel" in result card)
-  function handleDownload() {
+  // STEP 4: Download action with quality/resolution selection
+  async function handleDownload(qualityToDownload?: string) {
     if (!result || downloading) return;
     setDownloading(true);
 
-    const isImage = !result.isVideo;
-    const cleanName = `${result.creator}-${result.kind || "media"}`.replace(/[^a-zA-Z0-9_-]/g, "_");
-    const targetUrl = proxyUrl(result.videoUrl, cleanName, isImage, false);
+    const mediaType = (result?.type || "").toLowerCase();
+    const isVideo = mediaType !== "post" && mediaType !== "photo" && mediaType !== "image";
+    const quality = qualityToDownload || selectedQuality || "Original";
 
-    const link = document.createElement("a");
-    link.href = targetUrl;
-    link.download = `${cleanName}.${isImage ? "jpg" : "mp4"}`;
-    link.rel = "noopener noreferrer";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    try {
+      const downloadData = await downloadMedia(url.trim(), quality);
 
-    setTimeout(() => {
+      const rawUrl =
+        downloadData?.downloadUrl ||
+        (downloadData as any)?.download_url ||
+        (downloadData as any)?.url ||
+        (downloadData as any)?.data?.downloadUrl ||
+        (downloadData as any)?.data?.url ||
+        "";
+
+      let finalFilename: string =
+        downloadData?.filename ||
+        (downloadData as any)?.fileName ||
+        (downloadData as any)?.file_name ||
+        (downloadData as any)?.data?.filename ||
+        (isVideo ? `instagram-reel-${quality}.mp4` : "instagram-photo.jpg");
+
+      if (
+        isVideo &&
+        quality &&
+        typeof finalFilename === "string" &&
+        !finalFilename.toLowerCase().includes(quality.toLowerCase())
+      ) {
+        finalFilename = finalFilename.replace(/(\.[\w\d]+)$/i, `_${quality}$1`);
+      }
+
+      if (!rawUrl) {
+        throw new Error("No download stream URL was returned from the server.");
+      }
+
+      await triggerBrowserDownload(rawUrl, finalFilename);
+
+      toast.success(
+        isVideo ? `${quality} Reel download started` : "Photo download started"
+      );
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to download media. Please try again.";
+      setError(msg);
+      toast.error(msg);
+    } finally {
       setDownloading(false);
-      toast.success(isImage ? "Photo download started" : "Video download started");
-    }, 1200);
+    }
   }
 
   function handleReset() {
     setUrl("");
     setResult(null);
     setError(null);
-    setDuration(null);
     setImageError(false);
     inputRef.current?.focus();
   }
@@ -199,20 +225,6 @@ function HomePage() {
     const elem = document.getElementById(id);
     if (elem) {
       elem.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }
-
-  function getMediaLabel(kind: MediaKind, isVideo: boolean): string {
-    if (!isVideo) return "Instagram Photo";
-    switch (kind) {
-      case "reel":
-        return "Instagram Reel";
-      case "story":
-        return "Instagram Story";
-      case "post":
-        return "Instagram Video";
-      default:
-        return "Instagram Video";
     }
   }
 
@@ -365,7 +377,7 @@ function HomePage() {
           </p>
 
           {/* Downloader Card: Initial state has input + "Analyze Link" */}
-          <div className="mt-10 rounded-2xl border border-[#27272A] bg-[#141416] p-4 sm:p-6 shadow-2xl text-left">
+          <div className="mt-8 rounded-2xl border border-[#27272A] bg-[#141416] p-4 sm:p-6 shadow-2xl text-left">
             <label
               htmlFor="insta-url"
               className="block text-xs font-semibold uppercase tracking-wider text-[#A1A1AA] mb-2.5"
@@ -428,8 +440,11 @@ function HomePage() {
 
             {/* Error state */}
             {error && (
-              <div className="mt-3.5 flex items-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-3.5 py-2.5 text-xs sm:text-sm text-red-400">
-                <span>{error}</span>
+              <div className="mt-3.5 flex items-start gap-2.5 rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-xs sm:text-sm text-red-400">
+                <span className="mt-0.5 font-bold">✕</span>
+                <div className="flex-1 leading-relaxed">
+                  <span>{error}</span>
+                </div>
               </div>
             )}
 
@@ -450,7 +465,9 @@ function HomePage() {
               <div className="flex items-center justify-between border-b border-[#27272A] pb-4 mb-6">
                 <div className="flex items-center gap-2 text-sm font-semibold text-[#10B981]">
                   <CheckCircle2 className="h-5 w-5" />
-                  <span>Reel found</span>
+                  <span>
+                    {result.type?.toLowerCase() === "post" ? "Photo found" : "Reel found"}
+                  </span>
                 </div>
                 <span className="text-xs text-[#A1A1AA] bg-[#1A1A1D] px-2.5 py-1 rounded-md border border-[#27272A]">
                   Public Instagram content
@@ -459,26 +476,23 @@ function HomePage() {
 
               <div className="grid grid-cols-1 md:grid-cols-[minmax(0,280px)_1fr] gap-6 items-start">
                 {/* LARGE VIDEO / IMAGE THUMBNAIL */}
-                <div className="relative aspect-[9/16] max-h-[380px] w-full rounded-xl overflow-hidden bg-[#0B0B0D] border border-[#27272A] flex items-center justify-center">
-                  {!imageError && (result.thumbnail || result.videoUrl) ? (
-                    result.isVideo ? (
-                      <video
-                        src={proxyUrl(result.videoUrl, "preview", false, true)}
-                        poster={result.thumbnail ?? undefined}
-                        controls
-                        playsInline
-                        preload="metadata"
-                        onError={() => setImageError(true)}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
+                <div className="relative aspect-[9/16] max-h-[380px] w-full rounded-xl overflow-hidden bg-[#0B0B0D] border border-[#27272A] flex items-center justify-center group">
+                  {!imageError && result.thumbnail ? (
+                    <>
                       <img
-                        src={proxyUrl(result.videoUrl, "preview", true, true)}
-                        alt={`Photo by @${result.creator}`}
+                        src={result.thumbnail}
+                        alt={result.title || "Instagram media preview"}
                         onError={() => setImageError(true)}
-                        className="h-full w-full object-cover"
+                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                       />
-                    )
+                      {result.type?.toLowerCase() !== "post" && (
+                        <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                          <div className="h-12 w-12 rounded-full bg-black/60 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white shadow-lg">
+                            <Film className="h-6 w-6 text-white" />
+                          </div>
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <div className="text-center p-4">
                       <Film className="h-8 w-8 text-[#A1A1AA] mx-auto mb-2 opacity-50" />
@@ -490,71 +504,106 @@ function HomePage() {
                 {/* Info and Download Options */}
                 <div className="flex flex-col justify-between h-full space-y-5">
                   <div className="space-y-2.5">
-                    <div className="flex items-center gap-2">
-                      <a
-                        href={`https://www.instagram.com/${result.creator}/`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-base font-bold text-white hover:text-[#6366F1] transition flex items-center gap-1"
-                      >
-                        @{result.creator}
-                        <ExternalLink className="h-3.5 w-3.5 text-[#A1A1AA]" />
-                      </a>
-                    </div>
+                    <h3 className="text-base font-bold text-white leading-snug line-clamp-3">
+                      {result.title || "Public Instagram Reel"}
+                    </h3>
 
                     <p className="text-sm font-medium text-[#A1A1AA]">
-                      {getMediaLabel(result.kind, result.isVideo)}
-                      {formatDuration(duration ?? result.duration) && (
-                        <span> · {formatDuration(duration ?? result.duration)}</span>
-                      )}
+                      {getMediaLabel(result.type)} · Ready for instant download
                     </p>
 
-                    {result.caption && (
-                      <p className="text-xs text-[#A1A1AA] line-clamp-3 leading-relaxed mt-2 bg-[#0B0B0D] p-3 rounded-lg border border-[#27272A]">
-                        {result.caption}
-                      </p>
+                    {result.available && (
+                      <div className="inline-flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-md">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        <span>Media verified &amp; available</span>
+                      </div>
                     )}
                   </div>
 
-                  {/* Quality Options */}
-                  <div className="space-y-2 pt-2">
-                    <label className="text-xs font-semibold text-[#A1A1AA] uppercase tracking-wider block">
-                      Quality
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {["Original", "1080p", "720p"].map((q) => (
-                        <button
-                          key={q}
-                          type="button"
-                          onClick={() => setSelectedQuality(q)}
-                          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold border transition ${
-                            selectedQuality === q
-                              ? "bg-[#6366F1] border-[#6366F1] text-white"
-                              : "bg-[#1A1A1D] border-[#27272A] text-[#A1A1AA] hover:text-white"
-                          }`}
-                        >
-                          {q}
-                        </button>
-                      ))}
+                  {/* Quality & Resolution Picker */}
+                  {result.type?.toLowerCase() !== "post" ? (
+                    <div className="space-y-2.5 pt-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-[#A1A1AA] uppercase tracking-wider block">
+                          Choose Video Resolution
+                        </label>
+                        <span className="text-[11px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-medium">
+                          Selected: {selectedQuality}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        {[
+                          { id: "1080p", label: "1080p Full HD", badge: "HD", desc: "Best quality" },
+                          { id: "720p", label: "720p HD", badge: "Fast", desc: "Balanced size" },
+                          { id: "Original", label: "Original", badge: "Source", desc: "Direct stream" },
+                        ].map((q) => {
+                          const isSelected = selectedQuality === q.id;
+                          return (
+                            <button
+                              key={q.id}
+                              type="button"
+                              onClick={() => setSelectedQuality(q.id)}
+                              className={`flex flex-col items-start p-3 rounded-xl border text-left transition ${
+                                isSelected
+                                  ? "bg-[#6366F1]/15 border-[#6366F1] ring-1 ring-[#6366F1] text-white shadow-sm"
+                                  : "bg-[#1A1A1D] border-[#27272A] text-[#A1A1AA] hover:border-[#3F3F46] hover:text-white"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between w-full">
+                                <span className="text-xs font-bold text-white">{q.label}</span>
+                                <span
+                                  className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                                    isSelected
+                                      ? "bg-[#6366F1] text-white"
+                                      : "bg-[#27272A] text-[#A1A1AA]"
+                                  }`}
+                                >
+                                  {q.badge}
+                                </span>
+                              </div>
+                              <span className="text-[11px] text-[#71717A] mt-1">{q.desc}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="space-y-2 pt-2">
+                      <label className="text-xs font-semibold text-[#A1A1AA] uppercase tracking-wider block">
+                        Photo Resolution
+                      </label>
+                      <div className="flex items-center justify-between p-3 rounded-xl border border-[#27272A] bg-[#1A1A1D]">
+                        <span className="text-xs font-bold text-white">Full Resolution Image</span>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                          Original Quality
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Primary Download Button: "Download Reel" (appears ONLY in result card) */}
                   <div className="pt-2 space-y-2.5">
                     <button
-                      onClick={handleDownload}
+                      onClick={() => handleDownload(selectedQuality)}
                       disabled={downloading}
                       className="w-full h-[52px] rounded-xl bg-[#6366F1] hover:bg-[#4F46E5] text-white font-semibold text-base transition flex items-center justify-center gap-2 shadow-lg disabled:opacity-60"
                     >
                       {downloading ? (
                         <>
                           <Loader2 className="h-5 w-5 animate-spin" />
-                          <span>Preparing your download...</span>
+                          <span>
+                            Preparing {result.type?.toLowerCase() === "post" ? "Photo" : selectedQuality} download...
+                          </span>
                         </>
                       ) : (
                         <>
                           <Download className="h-5 w-5" />
-                          <span>{result.isVideo ? "Download Reel" : "Download Photo"}</span>
+                          <span>
+                            {result.type?.toLowerCase() === "post"
+                              ? "Download High-Res Photo"
+                              : `Download Reel (${selectedQuality})`}
+                          </span>
                         </>
                       )}
                     </button>
