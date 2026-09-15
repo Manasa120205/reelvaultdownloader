@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { useRef, useState } from "react";
 import {
   CheckCircle2,
   Download,
@@ -25,14 +26,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import {
-  analyzeMedia,
-  downloadMedia,
-  fetchQuota,
-  triggerBrowserDownload,
-  type AnalyzeSuccessResponse,
-  type QuotaInfo,
-} from "@/lib/publicMediaApi";
+import { analyzeLink, type AnalyzeResult, type MediaKind } from "@/lib/instagram.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -67,41 +61,35 @@ export const Route = createFileRoute("/")({
   component: HomePage,
 });
 
-function getMediaLabel(type: string): string {
-  switch (type.toLowerCase()) {
-    case "reel":
-      return "Instagram Reel";
-    case "story":
-      return "Instagram Story";
-    case "post":
-      return "Instagram Post / Photo";
-    case "video":
-      return "Instagram Video";
-    default:
-      return `Instagram ${type.charAt(0).toUpperCase() + type.slice(1)}`;
-  }
+function proxyUrl(videoUrl: string, name: string, isImage: boolean, inline: boolean) {
+  return `/api/public/download?name=${encodeURIComponent(name)}&url=${encodeURIComponent(videoUrl)}${
+    inline ? "&mode=inline" : ""
+  }${isImage ? "&type=image" : ""}`;
+}
+
+function formatDuration(seconds: number | null) {
+  if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return null;
+  const total = Math.round(seconds);
+  const m = Math.floor(total / 60);
+  const s = String(total % 60).padStart(2, "0");
+  return `${m}:${s}`;
 }
 
 function HomePage() {
+  const analyze = useServerFn(analyzeLink);
+
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<AnalyzeSuccessResponse | null>(null);
-  const [quota, setQuota] = useState<QuotaInfo | null>(null);
+  const [result, setResult] = useState<AnalyzeResult | null>(null);
+  const [duration, setDuration] = useState<number | null>(null);
   const [selectedQuality, setSelectedQuality] = useState("Original");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const resultRef = useRef<HTMLDivElement | null>(null);
-
-  // Load initial quota on mount
-  useEffect(() => {
-    fetchQuota().then((q) => {
-      if (q) setQuota(q);
-    });
-  }, []);
 
   function validateInstagramUrl(input: string): boolean {
     try {
@@ -137,67 +125,71 @@ function HomePage() {
     }
 
     if (!validateInstagramUrl(cleanUrl)) {
-      setError("Please enter a valid Instagram link (e.g. https://www.instagram.com/reel/...).");
+      setError("Please enter a valid Instagram link.");
       return;
     }
 
     setLoading(true);
     setError(null);
     setResult(null);
+    setDuration(null);
     setImageError(false);
 
     try {
-      const data = await analyzeMedia(cleanUrl);
+      const data = await analyze({
+        data: {
+          url: cleanUrl,
+        },
+      });
+
       setResult(data);
+      setDuration(data.duration);
 
       setTimeout(() => {
         resultRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       }, 100);
     } catch (err) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : "Unable to analyze this Reel. Please check the link and try again.";
-      setError(msg);
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("valid Instagram link")) {
+        setError("Please enter a valid Instagram link.");
+      } else if (msg.includes("quota") || msg.includes("RapidAPI") || msg.includes("RAPIDAPI_KEY") || msg.includes("Server configuration")) {
+        setError(msg);
+      } else {
+        setError("Unable to analyze this Reel. Please check the link and try again.");
+      }
     } finally {
       setLoading(false);
     }
   }
 
   // STEP 4: Download action (only triggered when user clicks "Download Reel" in result card)
-  async function handleDownload() {
+  function handleDownload() {
     if (!result || downloading) return;
     setDownloading(true);
 
-    const isVideo = result.type.toLowerCase() !== "post" && result.type.toLowerCase() !== "photo";
+    const isImage = !result.isVideo;
+    const cleanName = `${result.creator}-${result.kind || "media"}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const targetUrl = proxyUrl(result.videoUrl, cleanName, isImage, false);
 
-    try {
-      const downloadData = await downloadMedia(url.trim());
-      triggerBrowserDownload(downloadData.downloadUrl, downloadData.filename);
+    const link = document.createElement("a");
+    link.href = targetUrl;
+    link.download = `${cleanName}.${isImage ? "jpg" : "mp4"}`;
+    link.rel = "noopener noreferrer";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
 
-      if (downloadData.quota) {
-        setQuota(downloadData.quota);
-      } else {
-        fetchQuota().then((q) => {
-          if (q) setQuota(q);
-        });
-      }
-
-      toast.success(isVideo ? "Reel download started" : "Photo download started");
-    } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : "Failed to download media. Please try again.";
-      setError(msg);
-      toast.error(msg);
-    } finally {
+    setTimeout(() => {
       setDownloading(false);
-    }
+      toast.success(isImage ? "Photo download started" : "Video download started");
+    }, 1200);
   }
 
   function handleReset() {
     setUrl("");
     setResult(null);
     setError(null);
+    setDuration(null);
     setImageError(false);
     inputRef.current?.focus();
   }
@@ -207,6 +199,20 @@ function HomePage() {
     const elem = document.getElementById(id);
     if (elem) {
       elem.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  function getMediaLabel(kind: MediaKind, isVideo: boolean): string {
+    if (!isVideo) return "Instagram Photo";
+    switch (kind) {
+      case "reel":
+        return "Instagram Reel";
+      case "story":
+        return "Instagram Story";
+      case "post":
+        return "Instagram Video";
+      default:
+        return "Instagram Video";
     }
   }
 
@@ -358,27 +364,8 @@ function HomePage() {
             Paste an Instagram link and download your favorite public reels quickly and easily.
           </p>
 
-          {/* Live Quota Badge */}
-          <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-[#27272A] bg-[#141416]/90 px-4 py-1.5 text-xs text-[#A1A1AA] shadow-md">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-semibold text-white">PublicMedia Engine</span>
-            <span className="text-[#3F3F46]">|</span>
-            <span>
-              {quota ? (
-                <>
-                  <strong className="text-white font-medium">
-                    {quota.remaining.toLocaleString()}
-                  </strong>{" "}
-                  / {quota.limit.toLocaleString()} free downloads left this month
-                </>
-              ) : (
-                "5,000 free monthly downloads"
-              )}
-            </span>
-          </div>
-
           {/* Downloader Card: Initial state has input + "Analyze Link" */}
-          <div className="mt-8 rounded-2xl border border-[#27272A] bg-[#141416] p-4 sm:p-6 shadow-2xl text-left">
+          <div className="mt-10 rounded-2xl border border-[#27272A] bg-[#141416] p-4 sm:p-6 shadow-2xl text-left">
             <label
               htmlFor="insta-url"
               className="block text-xs font-semibold uppercase tracking-wider text-[#A1A1AA] mb-2.5"
@@ -441,11 +428,8 @@ function HomePage() {
 
             {/* Error state */}
             {error && (
-              <div className="mt-3.5 flex items-start gap-2.5 rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-xs sm:text-sm text-red-400">
-                <span className="mt-0.5 font-bold">✕</span>
-                <div className="flex-1 leading-relaxed">
-                  <span>{error}</span>
-                </div>
+              <div className="mt-3.5 flex items-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-3.5 py-2.5 text-xs sm:text-sm text-red-400">
+                <span>{error}</span>
               </div>
             )}
 
@@ -466,9 +450,7 @@ function HomePage() {
               <div className="flex items-center justify-between border-b border-[#27272A] pb-4 mb-6">
                 <div className="flex items-center gap-2 text-sm font-semibold text-[#10B981]">
                   <CheckCircle2 className="h-5 w-5" />
-                  <span>
-                    {result.type?.toLowerCase() === "post" ? "Photo found" : "Reel found"}
-                  </span>
+                  <span>Reel found</span>
                 </div>
                 <span className="text-xs text-[#A1A1AA] bg-[#1A1A1D] px-2.5 py-1 rounded-md border border-[#27272A]">
                   Public Instagram content
@@ -477,23 +459,26 @@ function HomePage() {
 
               <div className="grid grid-cols-1 md:grid-cols-[minmax(0,280px)_1fr] gap-6 items-start">
                 {/* LARGE VIDEO / IMAGE THUMBNAIL */}
-                <div className="relative aspect-[9/16] max-h-[380px] w-full rounded-xl overflow-hidden bg-[#0B0B0D] border border-[#27272A] flex items-center justify-center group">
-                  {!imageError && result.thumbnail ? (
-                    <>
-                      <img
-                        src={result.thumbnail}
-                        alt={result.title || "Instagram media preview"}
+                <div className="relative aspect-[9/16] max-h-[380px] w-full rounded-xl overflow-hidden bg-[#0B0B0D] border border-[#27272A] flex items-center justify-center">
+                  {!imageError && (result.thumbnail || result.videoUrl) ? (
+                    result.isVideo ? (
+                      <video
+                        src={proxyUrl(result.videoUrl, "preview", false, true)}
+                        poster={result.thumbnail ?? undefined}
+                        controls
+                        playsInline
+                        preload="metadata"
                         onError={() => setImageError(true)}
-                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                        className="h-full w-full object-cover"
                       />
-                      {result.type?.toLowerCase() !== "post" && (
-                        <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                          <div className="h-12 w-12 rounded-full bg-black/60 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white shadow-lg">
-                            <Film className="h-6 w-6 text-white" />
-                          </div>
-                        </div>
-                      )}
-                    </>
+                    ) : (
+                      <img
+                        src={proxyUrl(result.videoUrl, "preview", true, true)}
+                        alt={`Photo by @${result.creator}`}
+                        onError={() => setImageError(true)}
+                        className="h-full w-full object-cover"
+                      />
+                    )
                   ) : (
                     <div className="text-center p-4">
                       <Film className="h-8 w-8 text-[#A1A1AA] mx-auto mb-2 opacity-50" />
@@ -505,19 +490,29 @@ function HomePage() {
                 {/* Info and Download Options */}
                 <div className="flex flex-col justify-between h-full space-y-5">
                   <div className="space-y-2.5">
-                    <h3 className="text-base font-bold text-white leading-snug line-clamp-3">
-                      {result.title || "Public Instagram Reel"}
-                    </h3>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={`https://www.instagram.com/${result.creator}/`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-base font-bold text-white hover:text-[#6366F1] transition flex items-center gap-1"
+                      >
+                        @{result.creator}
+                        <ExternalLink className="h-3.5 w-3.5 text-[#A1A1AA]" />
+                      </a>
+                    </div>
 
                     <p className="text-sm font-medium text-[#A1A1AA]">
-                      {getMediaLabel(result.type)} · Ready for instant download
+                      {getMediaLabel(result.kind, result.isVideo)}
+                      {formatDuration(duration ?? result.duration) && (
+                        <span> · {formatDuration(duration ?? result.duration)}</span>
+                      )}
                     </p>
 
-                    {result.available && (
-                      <div className="inline-flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-md">
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        <span>Media verified &amp; available</span>
-                      </div>
+                    {result.caption && (
+                      <p className="text-xs text-[#A1A1AA] line-clamp-3 leading-relaxed mt-2 bg-[#0B0B0D] p-3 rounded-lg border border-[#27272A]">
+                        {result.caption}
+                      </p>
                     )}
                   </div>
 
@@ -559,18 +554,10 @@ function HomePage() {
                       ) : (
                         <>
                           <Download className="h-5 w-5" />
-                          <span>
-                            {result.type?.toLowerCase() === "post" ? "Download Photo" : "Download Reel"}
-                          </span>
+                          <span>{result.isVideo ? "Download Reel" : "Download Photo"}</span>
                         </>
                       )}
                     </button>
-
-                    {quota && (
-                      <p className="text-center text-xs text-[#71717A]">
-                        {quota.remaining.toLocaleString()} free downloads remaining this month
-                      </p>
-                    )}
 
                     <button
                       type="button"
