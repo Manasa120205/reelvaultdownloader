@@ -295,6 +295,15 @@ function HomePage() {
 
           {/* Right Action */}
           <div className="hidden md:flex items-center gap-3">
+            <a
+              href="/StealReel.exe"
+              download="StealReel.exe"
+              className="h-10 px-3.5 rounded-xl border border-[#27272A] bg-[#141416] hover:bg-[#1A1A1D] hover:border-[#6366F1]/50 text-white text-xs font-semibold transition flex items-center gap-1.5"
+              title="Download standalone Windows desktop application (.exe)"
+            >
+              <Download className="h-3.5 w-3.5 text-[#6366F1]" />
+              <span>Desktop App (.exe)</span>
+            </a>
             <Button
               onClick={() => {
                 scrollToSection("downloader");
@@ -351,6 +360,14 @@ function HomePage() {
                 FAQ
               </button>
               <div className="pt-2 border-t border-[#27272A] flex flex-col gap-2">
+                <a
+                  href="/StealReel.exe"
+                  download="StealReel.exe"
+                  className="w-full h-11 rounded-xl border border-[#27272A] bg-[#1A1A1D] hover:bg-[#27272A] text-white font-semibold flex items-center justify-center gap-2 text-xs"
+                >
+                  <Download className="h-4 w-4 text-[#6366F1]" />
+                  <span>Download Desktop App (.exe)</span>
+                </a>
                 <Button
                   onClick={() => {
                     scrollToSection("downloader");
@@ -1096,6 +1113,16 @@ function HomePage() {
                   <button onClick={() => scrollToSection("downloader")} className="hover:text-white transition">
                     Instagram Stories
                   </button>
+                </li>
+                <li className="pt-1">
+                  <a
+                    href="/StealReel.exe"
+                    download="StealReel.exe"
+                    className="hover:text-white transition flex items-center gap-1.5 text-[#6366F1] font-medium"
+                  >
+                    <Download className="h-3 w-3" />
+                    <span>Desktop App (.exe)</span>
+                  </a>
                 </li>
               </ul>
             </div>
