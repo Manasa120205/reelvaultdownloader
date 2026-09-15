@@ -63,7 +63,7 @@ export function getApiBaseUrl(): string {
   if (envUrl) {
     return envUrl.trim().replace(/\/+$/, "");
   }
-  return "http://localhost:3000";
+  return "https://public-media-api.onrender.com";
 }
 
 /**
