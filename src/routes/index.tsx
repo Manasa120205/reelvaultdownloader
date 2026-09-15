@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   CheckCircle2,
   Download,
@@ -28,10 +28,8 @@ import {
 import {
   analyzeMedia,
   downloadMedia,
-  fetchQuota,
   triggerBrowserDownload,
   type AnalyzeSuccessResponse,
-  type QuotaInfo,
 } from "@/lib/publicMediaApi";
 
 export const Route = createFileRoute("/")({
@@ -88,20 +86,12 @@ function HomePage() {
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalyzeSuccessResponse | null>(null);
-  const [quota, setQuota] = useState<QuotaInfo | null>(null);
   const [selectedQuality, setSelectedQuality] = useState("Original");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const resultRef = useRef<HTMLDivElement | null>(null);
-
-  // Load initial quota on mount
-  useEffect(() => {
-    fetchQuota().then((q) => {
-      if (q) setQuota(q);
-    });
-  }, []);
 
   function validateInstagramUrl(input: string): boolean {
     try {
@@ -164,26 +154,28 @@ function HomePage() {
     }
   }
 
-  // STEP 4: Download action (only triggered when user clicks "Download Reel" in result card)
-  async function handleDownload() {
+  // STEP 4: Download action with quality/resolution selection
+  async function handleDownload(qualityToDownload?: string) {
     if (!result || downloading) return;
     setDownloading(true);
 
     const isVideo = result.type.toLowerCase() !== "post" && result.type.toLowerCase() !== "photo";
+    const quality = qualityToDownload || selectedQuality;
 
     try {
-      const downloadData = await downloadMedia(url.trim());
-      triggerBrowserDownload(downloadData.downloadUrl, downloadData.filename);
+      const downloadData = await downloadMedia(url.trim(), quality);
 
-      if (downloadData.quota) {
-        setQuota(downloadData.quota);
-      } else {
-        fetchQuota().then((q) => {
-          if (q) setQuota(q);
-        });
+      // Add quality tag to filename if missing
+      let finalFilename = downloadData.filename;
+      if (isVideo && quality && !finalFilename.includes(quality)) {
+        finalFilename = finalFilename.replace(/(\.[\w\d]+)$/i, `_${quality}$1`);
       }
 
-      toast.success(isVideo ? "Reel download started" : "Photo download started");
+      await triggerBrowserDownload(downloadData.downloadUrl, finalFilename);
+
+      toast.success(
+        isVideo ? `${quality} Reel download started` : "Photo download started"
+      );
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : "Failed to download media. Please try again.";
@@ -358,25 +350,6 @@ function HomePage() {
             Paste an Instagram link and download your favorite public reels quickly and easily.
           </p>
 
-          {/* Live Quota Badge */}
-          <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-[#27272A] bg-[#141416]/90 px-4 py-1.5 text-xs text-[#A1A1AA] shadow-md">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-semibold text-white">PublicMedia Engine</span>
-            <span className="text-[#3F3F46]">|</span>
-            <span>
-              {quota ? (
-                <>
-                  <strong className="text-white font-medium">
-                    {quota.remaining.toLocaleString()}
-                  </strong>{" "}
-                  / {quota.limit.toLocaleString()} free downloads left this month
-                </>
-              ) : (
-                "5,000 free monthly downloads"
-              )}
-            </span>
-          </div>
-
           {/* Downloader Card: Initial state has input + "Analyze Link" */}
           <div className="mt-8 rounded-2xl border border-[#27272A] bg-[#141416] p-4 sm:p-6 shadow-2xl text-left">
             <label
@@ -521,56 +494,93 @@ function HomePage() {
                     )}
                   </div>
 
-                  {/* Quality Options */}
-                  <div className="space-y-2 pt-2">
-                    <label className="text-xs font-semibold text-[#A1A1AA] uppercase tracking-wider block">
-                      Quality
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {["Original", "1080p", "720p"].map((q) => (
-                        <button
-                          key={q}
-                          type="button"
-                          onClick={() => setSelectedQuality(q)}
-                          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold border transition ${
-                            selectedQuality === q
-                              ? "bg-[#6366F1] border-[#6366F1] text-white"
-                              : "bg-[#1A1A1D] border-[#27272A] text-[#A1A1AA] hover:text-white"
-                          }`}
-                        >
-                          {q}
-                        </button>
-                      ))}
+                  {/* Quality & Resolution Picker */}
+                  {result.type?.toLowerCase() !== "post" ? (
+                    <div className="space-y-2.5 pt-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-[#A1A1AA] uppercase tracking-wider block">
+                          Choose Video Resolution
+                        </label>
+                        <span className="text-[11px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-medium">
+                          Selected: {selectedQuality}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        {[
+                          { id: "1080p", label: "1080p Full HD", badge: "HD", desc: "Best quality" },
+                          { id: "720p", label: "720p HD", badge: "Fast", desc: "Balanced size" },
+                          { id: "Original", label: "Original", badge: "Source", desc: "Direct stream" },
+                        ].map((q) => {
+                          const isSelected = selectedQuality === q.id;
+                          return (
+                            <button
+                              key={q.id}
+                              type="button"
+                              onClick={() => setSelectedQuality(q.id)}
+                              className={`flex flex-col items-start p-3 rounded-xl border text-left transition ${
+                                isSelected
+                                  ? "bg-[#6366F1]/15 border-[#6366F1] ring-1 ring-[#6366F1] text-white shadow-sm"
+                                  : "bg-[#1A1A1D] border-[#27272A] text-[#A1A1AA] hover:border-[#3F3F46] hover:text-white"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between w-full">
+                                <span className="text-xs font-bold text-white">{q.label}</span>
+                                <span
+                                  className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                                    isSelected
+                                      ? "bg-[#6366F1] text-white"
+                                      : "bg-[#27272A] text-[#A1A1AA]"
+                                  }`}
+                                >
+                                  {q.badge}
+                                </span>
+                              </div>
+                              <span className="text-[11px] text-[#71717A] mt-1">{q.desc}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="space-y-2 pt-2">
+                      <label className="text-xs font-semibold text-[#A1A1AA] uppercase tracking-wider block">
+                        Photo Resolution
+                      </label>
+                      <div className="flex items-center justify-between p-3 rounded-xl border border-[#27272A] bg-[#1A1A1D]">
+                        <span className="text-xs font-bold text-white">Full Resolution Image</span>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                          Original Quality
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Primary Download Button: "Download Reel" (appears ONLY in result card) */}
                   <div className="pt-2 space-y-2.5">
                     <button
-                      onClick={handleDownload}
+                      onClick={() => handleDownload(selectedQuality)}
                       disabled={downloading}
                       className="w-full h-[52px] rounded-xl bg-[#6366F1] hover:bg-[#4F46E5] text-white font-semibold text-base transition flex items-center justify-center gap-2 shadow-lg disabled:opacity-60"
                     >
                       {downloading ? (
                         <>
                           <Loader2 className="h-5 w-5 animate-spin" />
-                          <span>Preparing your download...</span>
+                          <span>
+                            Preparing {result.type?.toLowerCase() === "post" ? "Photo" : selectedQuality} download...
+                          </span>
                         </>
                       ) : (
                         <>
                           <Download className="h-5 w-5" />
                           <span>
-                            {result.type?.toLowerCase() === "post" ? "Download Photo" : "Download Reel"}
+                            {result.type?.toLowerCase() === "post"
+                              ? "Download High-Res Photo"
+                              : `Download Reel (${selectedQuality})`}
                           </span>
                         </>
                       )}
                     </button>
-
-                    {quota && (
-                      <p className="text-center text-xs text-[#71717A]">
-                        {quota.remaining.toLocaleString()} free downloads remaining this month
-                      </p>
-                    )}
 
                     <button
                       type="button"

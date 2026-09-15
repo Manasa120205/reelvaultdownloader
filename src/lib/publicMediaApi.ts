@@ -169,9 +169,12 @@ export async function analyzeMedia(url: string): Promise<AnalyzeSuccessResponse>
 /**
  * Generates the media stream download URL and decrements quota.
  */
-export async function downloadMedia(url: string): Promise<DownloadSuccessResponse> {
+export async function downloadMedia(url: string, quality?: string): Promise<DownloadSuccessResponse> {
   const baseUrl = getApiBaseUrl();
   let res: Response;
+
+  const payload: { url: string; quality?: string } = { url: url.trim() };
+  if (quality) payload.quality = quality;
 
   try {
     res = await fetch(`${baseUrl}/api/media/download`, {
@@ -180,7 +183,7 @@ export async function downloadMedia(url: string): Promise<DownloadSuccessRespons
         "Content-Type": "application/json",
         Accept: "application/json",
       },
-      body: JSON.stringify({ url: url.trim() }),
+      body: JSON.stringify(payload),
     });
   } catch (err) {
     throw new PublicMediaApiError(
@@ -215,13 +218,30 @@ export async function downloadMedia(url: string): Promise<DownloadSuccessRespons
 
 /**
  * Triggers the browser download for the given direct media stream URL.
+ * Attempts to download as a blob to force saving directly to disk, with fallback.
  */
-export function triggerBrowserDownload(downloadUrl: string, filename: string): void {
+export async function triggerBrowserDownload(downloadUrl: string, filename: string): Promise<void> {
+  try {
+    const res = await fetch(downloadUrl);
+    if (res.ok) {
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = filename || "instagram-media.mp4";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+      return;
+    }
+  } catch {
+    // Network or CORS restriction on direct blob fetch - use anchor fallback
+  }
+
   const link = document.createElement("a");
   link.href = downloadUrl;
   link.download = filename || "instagram-media.mp4";
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
   document.body.appendChild(link);
   link.click();
   link.remove();
