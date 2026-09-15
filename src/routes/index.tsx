@@ -534,9 +534,9 @@ function HomePage() {
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                         {[
+                          { id: "Original", label: "Original Quality", badge: "Source", desc: "Direct stream" },
                           { id: "1080p", label: "1080p Full HD", badge: "HD", desc: "Best quality" },
                           { id: "720p", label: "720p HD", badge: "Fast", desc: "Balanced size" },
-                          { id: "Original", label: "Original", badge: "Source", desc: "Direct stream" },
                         ].map((q) => {
                           const isSelected = selectedQuality === q.id;
                           return (
