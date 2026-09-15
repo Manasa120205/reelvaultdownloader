@@ -104,6 +104,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "Download supported public Instagram Reels, videos and photos quickly with StealReel. No Instagram login required.",
       },
       { name: "twitter:image", content: "/og-image.png" },
+      { name: "theme-color", content: "#0B0B0E" },
+      { name: "msapplication-TileColor", content: "#0B0B0E" },
     ],
     links: [
       {
@@ -116,9 +118,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap",
       },
+      { rel: "icon", href: "/favicon.ico", sizes: "32x32" },
+      { rel: "shortcut icon", href: "/favicon.ico" },
       { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
-      { rel: "alternate icon", href: "/favicon.ico", type: "image/x-icon" },
-      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+      { rel: "icon", href: "/favicon-32x32.png", type: "image/png", sizes: "32x32" },
+      { rel: "icon", href: "/favicon-16x16.png", type: "image/png", sizes: "16x16" },
+      { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
+      { rel: "manifest", href: "/site.webmanifest" },
     ],
   }),
 

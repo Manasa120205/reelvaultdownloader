@@ -210,11 +210,15 @@ function ContactPage() {
                   </div>
                 </div>
                 <p className="text-xs text-[#A1A1AA] leading-relaxed">
-                  You can also email us directly at:
+                  You can email us directly anytime at:
                 </p>
-                <div className="mt-2 inline-block rounded-lg bg-[#0B0B0D] border border-[#27272A] px-3 py-1.5 font-mono text-xs text-[#6366F1]">
-                  support@stealreel.com
-                </div>
+                <a
+                  href="mailto:info@stealreel.com"
+                  className="mt-2 inline-flex items-center gap-2 rounded-lg bg-[#0B0B0D] hover:bg-[#1A1A24] border border-[#27272A] hover:border-[#6366F1]/50 px-3.5 py-2 font-mono text-xs text-[#6366F1] hover:text-[#818CF8] transition"
+                >
+                  <Mail className="h-3.5 w-3.5" />
+                  <span>info@stealreel.com</span>
+                </a>
               </div>
 
               <div className="rounded-2xl border border-[#27272A] bg-[#141416] p-6">
